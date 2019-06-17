@@ -1,0 +1,5 @@
+C:\Users\Gatho\source\repos\AnimalSkinner\AnimalSkinner\bin\Debug\AnimalSkinner.dll
+C:\Users\Gatho\source\repos\AnimalSkinner\AnimalSkinner\bin\Debug\AnimalSkinner.pdb
+C:\Users\Gatho\source\repos\AnimalSkinner\AnimalSkinner\obj\Debug\AnimalSkinner.csproj.CoreCompileInputs.cache
+C:\Users\Gatho\source\repos\AnimalSkinner\AnimalSkinner\obj\Debug\AnimalSkinner.dll
+C:\Users\Gatho\source\repos\AnimalSkinner\AnimalSkinner\obj\Debug\AnimalSkinner.pdb
