@@ -41,6 +41,8 @@ namespace AnimalSkinner
         /// <summary>Recognized major creature categories</summary>
         internal enum CreatureCategory { Horse, Pet, Animal };
 
+        internal ModConfig Config;
+
 
 
 
@@ -91,9 +93,6 @@ namespace AnimalSkinner
         // Horse holder, to make sure multi-horses don't disappear on dismount
         internal List<Horse> BeingRidden = new List<Horse>();
 
-        // Tracks whether information has been loaded from save that needs to be accounted for in the new day check
-        internal bool NewDayFromSave = true;
-
         // Tracks the text to display on hover over a pet or horse, if any
         internal string HoverText;
 
@@ -114,6 +113,9 @@ namespace AnimalSkinner
             ModEntry.SHelper = helper;
             ModEntry.SMonitor = this.Monitor;
 
+            // Config settings
+            this.Config = this.Helper.ReadConfig<ModConfig>();
+
             // Pet and Horse creation handler
             Creator = new CreationHandler(this);
 
@@ -131,8 +133,6 @@ namespace AnimalSkinner
             helper.Events.Input.ButtonPressed += Creator.HorseCheck;
 
             helper.Events.Display.RenderingHud += this.RenderHoverTooltip;
-            
-            // ** TODO: Implement handling added and removed animals
 
 
             // SMAPI Commands (CommandHandler? Internal?)
@@ -140,6 +140,8 @@ namespace AnimalSkinner
             helper.ConsoleCommands.Add("randomize_all_skins", "Randomizes the skins for every farm animal, pet, and horse on the farm.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("randomize_skin", "Randomizes the skin for the given creature. Call `randomize_skin <animal/pet/horse> <creature ID>`. To find a creature's ID, call list_creatures.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("set_skin", "Sets the skin of the given creature to the given skin ID. Call `set_skin <skin ID> <animal/pet/horse> <creature ID>`. To find a creature's ID, call list_creatures.", Commander.OnCommandReceived);
+            helper.ConsoleCommands.Add("corral_horses", "Warp all horses to the farm's stable, giving you the honor of being a clown car chauffeur.", Commander.OnCommandReceived);
+            helper.ConsoleCommands.Add("horse_whistle", "Summons one of the player's horses to them. Can be called with a horse's ID to call a specific horse.", Commander.OnCommandReceived);
 
             // DEBUG
             helper.ConsoleCommands.Add("debug_skinmaps", "DEBUG: Prints all info in current skin maps", Commander.OnCommandReceived);
@@ -149,7 +151,6 @@ namespace AnimalSkinner
             helper.ConsoleCommands.Add("find_horse", "DEBUG: Find where the heck dat horse at. Format: debug_find_horse <horse ID>.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("adopt_pet", "DEBUG: Add pet. Warp to farm.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("summon_horse", "DEBUG: Summons a wild horse. Somewhere.", Commander.OnCommandReceived);
-            helper.ConsoleCommands.Add("corral_horses", "DEBUG: Warp all horses to the farm's stable, giving you the honor of being a clown car chauffeur.", Commander.OnCommandReceived);
 
         }
 
@@ -268,10 +269,7 @@ namespace AnimalSkinner
 
                     // A wild horse is being checked
                     if (horse.Manners == WildHorse.WildID)
-                    {
-                        this.Monitor.Log($"Wild ID: {Creator.HorseInfo.SkinID}", LogLevel.Info);
                         return GetSkinFromID(horse.GetType().Name, Creator.HorseInfo.SkinID);
-                    }
                     // Horse is not in system
                     else if (horse.Manners == 0 || !HorseSkinMap.ContainsKey(horse.Manners))
                     {
@@ -457,22 +455,23 @@ namespace AnimalSkinner
             List<Horse> dismounted = new List<Horse>();
             foreach (Horse horse in BeingRidden)
             {
-                if (BeingRidden.Contains(horse) && horse.rider == null)
+                if (horse.rider == null)
                 {
                     GameLocation loc = horse.currentLocation;
                     Game1.removeThisCharacterFromAllLocations(horse);
                     loc.addCharacter(horse);
                     dismounted.Add(horse);
                 }
+                else if (Config.OneTileHorse)
+                {
+                    horse.squeezeForGate();
+                }
             }
 
             // Remove any dismounted horses from the list of horses currently being ridden
             if (dismounted.Count > 0)
                 foreach (Horse horse in dismounted)
-                {
-                    this.Monitor.Log($"{horse.Name} has been dismounted", LogLevel.Info);
                     BeingRidden.Remove(horse);
-                }
 
             // Check that animal list is up to date. If not, add/remove animal in system.
             if (Game1.getFarm() != null && AnimalCount != Game1.getFarm().getAllFarmAnimals().Count)
@@ -613,13 +612,9 @@ namespace AnimalSkinner
             switch (creature)
             {
                 case Horse horse:
-                    if (horse.Manners == WildHorse.WildID)
-                        this.Monitor.Log("WE GOT A WILD ONE", LogLevel.Info);
                     // Horse is already in system
                     if (HorseSkinMap.ContainsKey(horse.Manners))
                         break;
-                    if (horse.Manners == WildHorse.WildID)
-                        this.Monitor.Log("Wild didn't break", LogLevel.Info);
 
                     // Assign a ShortID to the horse
                     horse.Manners = GetUnusedShortID(CreatureCategory.Horse);
@@ -732,22 +727,9 @@ namespace AnimalSkinner
             AnimalLongToShortIDs = this.Helper.Data.ReadSaveData<Dictionary<long, int>>("animal-long-to-short-ids") ?? new Dictionary<long, int>();
             AnimalShortToLongIDs = this.Helper.Data.ReadSaveData<Dictionary<int, long>>("animal-short-to-long-ids") ?? new Dictionary<int, long>();
 
-            // Load potential pet info
-            List<string> potentialPet = this.Helper.Data.ReadSaveData<List<string>>("potential-pet") ?? new List<string>();
-            if (potentialPet.Count != 0)
-                Creator.LoadPotentialPet(potentialPet);
-            else
-                NewDayFromSave = false;
 
-            // Load wild horse info
-            List<string> wildHorse = this.Helper.Data.ReadSaveData<List<string>>("wild-horse") ?? new List<string>();
-            if (wildHorse.Count != 0)
-                Creator.LoadWildHorse(wildHorse);
-            else
-                NewDayFromSave = false;
-
-
-            // Ensure Pets and Horses are using the new Pet/Horse.Manners = Short ID system, as implemented in Animal Skinner 2.0.0
+            
+            // Set skins and ensure Pets and Horses are using the new Pet/Horse.Manners = Short ID system, as implemented in Animal Skinner 2.0.0
             foreach (Pet pet in GetPets())
             {
                 if (pet.Manners == 0)
@@ -755,22 +737,22 @@ namespace AnimalSkinner
                     this.Monitor.Log($"File new to Animal Skinner or older Animal Skinner save detected. The data has been updated and {pet.Name}'s skin has been randomized.", LogLevel.Alert);
                     AddCreature(pet);
                 }
+                else
+                    UpdateSkin(pet);
             }
             foreach (Horse horse in GetHorses())
+            {
                 if (horse.Manners == 0)
                 {
                     this.Monitor.Log($"File new to Animal Skinner or older Animal Skinner save detected. The data has been updated and {horse.Name}'s skin has been randomized.", LogLevel.Alert);
                     AddCreature(horse);
                 }
-
-
-            // Set creature skins
-            foreach (Horse horse in GetHorses())
-                UpdateSkin(horse);
-            foreach (Pet pet in GetPets())
-                UpdateSkin(pet);
+                else if (horse.Manners != WildHorse.WildID)
+                    UpdateSkin(horse);
+            }
             foreach (FarmAnimal animal in GetAnimals())
                 UpdateSkin(animal);
+
 
 
             // Set last known animal count
@@ -784,7 +766,7 @@ namespace AnimalSkinner
             switch (creature)
             {
                 case Horse horse:
-                    if ( Creator.HorseInfo != null && horse.Manners == WildHorse.WildID)
+                    if (Creator.HorseInfo != null && horse.Manners == WildHorse.WildID)
                     {
                         horse.Sprite = new AnimatedSprite(GetSkinFromID(horse.GetType().Name, Creator.HorseInfo.SkinID).AssetKey, 0, 32, 32);
                         break;
@@ -829,12 +811,6 @@ namespace AnimalSkinner
             // Save Short ID maps
             this.Helper.Data.WriteSaveData("animal-long-to-short-ids", AnimalLongToShortIDs);
             this.Helper.Data.WriteSaveData("animal-short-to-long-ids", AnimalShortToLongIDs);
-
-            // Save potential pet info
-            this.Helper.Data.WriteSaveData("potential-pet", Creator.GetPetSaveInfo());
-
-            // Save wild horse info
-            this.Helper.Data.WriteSaveData("wild-horse", Creator.GetHorseSaveInfo());
 
             // Save data version
             this.Helper.Data.WriteSaveData("data-version", "2");

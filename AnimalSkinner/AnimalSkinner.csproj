@@ -49,6 +49,7 @@
     <Compile Include="Framework\CreationHandler.cs" />
     <Compile Include="Framework\ModApi.cs" />
     <Compile Include="Framework\BFAV226Integrator.cs" />
+    <Compile Include="ModConfig.cs" />
     <Compile Include="ModEntry.cs" />
     <Compile Include="Framework\PotentialPet.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

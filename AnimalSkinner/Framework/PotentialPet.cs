@@ -31,27 +31,6 @@ namespace AnimalSkinner.Framework
         }
 
 
-        /// <summary>Creates a PotentialPet with the given information</summary>
-        /// <param name="type">The subtype of the potential pet</param>
-        /// <param name="skinid">The skin ID of the potential pet</param>
-        internal PotentialPet(string type, int skinid)
-        {
-            PetType = type.ToLower();
-            SkinID = skinid;
-        }
-
-
-        /// <summary>
-        /// Creates a PotentialPet using the same format that the save file is loaded in
-        /// The first item in the list should hold the PotentialPet's type, and the second item should be the PotentialPet's SkinID
-        /// </summary>
-        internal PotentialPet(List<string> info)
-        {
-            PetType = info[0].ToLower();
-            SkinID = int.Parse(info[1]);
-        }
-
-
         /// <summary>Creates a new Pet from the PotentialPet's information</summary>
         internal Pet CreatePet(string name)
         {

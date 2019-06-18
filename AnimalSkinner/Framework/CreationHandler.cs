@@ -31,11 +31,9 @@ namespace AnimalSkinner.Framework
         internal bool CanAdopt;
 
         /// <summary>The pet available for adoption at Marnies for the current day.</summary>
-        //internal PotentialPet PetInfo { get => PetInfo; set => NewPotentialPet(); }
-        internal PotentialPet PetInfo;
+        internal PotentialPet PetInfo = null;
         /// <summary>The wild horse available for adoption somewhere in the map. This variable is null if there is no current wild horse.</summary>
-        //internal WildHorse HorseInfo { get => HorseInfo; set => NewWildHorse(); }
-        internal WildHorse HorseInfo;
+        internal WildHorse HorseInfo = null;
 
 
 
@@ -50,36 +48,12 @@ namespace AnimalSkinner.Framework
         }
 
 
-        /// <summary>Returns true if a pet in available for adoption at Marnie's.</summary>
-        public bool CanAdoptNow()
-        {
-            return CanAdopt ? true : false;
-        }
-
-
-        internal void GetHorseInfo()
-        {
-            if (HorseInfo == null)
-                ModEntry.SMonitor.Log("No wild horse exists", LogLevel.Info);
-            else
-                ModEntry.SMonitor.Log($"Wild horse located at {HorseInfo.Map}: {HorseInfo.Tile}\nSkin ID {HorseInfo.SkinID}", LogLevel.Info);
-        }
-
-
         /// <summary>Resets variables that change each day</summary>
         internal void ProcessNewDay(object sender, DayStartedEventArgs e)
         {
-            // Don't load new potential pets or wild horses if it's already been loaded from the save data
-            if (Earth.NewDayFromSave)
-            {
-                Earth.NewDayFromSave = false;
-                return;
-            }
-            else
-            {
-                NewPotentialPet();
-                NewWildHorse();
-            }
+            Earth.Monitor.Log("It's a beautiful (new) day outside.", LogLevel.Warn);
+            NewPotentialPet();
+            NewWildHorse();
         }
 
 
@@ -96,11 +70,12 @@ namespace AnimalSkinner.Framework
         {
             // If the previous day had a WildHorse, remove it from the map
             if (HorseInfo != null)
-                HorseInfo.Remove();
+                HorseInfo.RemoveFromWorld();
 
             // Check chance for a WildHorse spawn, and spawn a new WildHorse if there should be one
             if (Randomizer.Next(0, 4) == 0 || overrideChance)
             {
+                // Only spawn a wild horse if the player has a stable
                 foreach (Building b in Game1.getFarm().buildings)
                     if (b is Stable || overrideChance)
                     {
@@ -110,50 +85,10 @@ namespace AnimalSkinner.Framework
             }
         }
 
-
-        /// <summary>Creates a PotentialPet using the save file's given information</summary>
-        internal void LoadPotentialPet(List<string> petInfo)
+        /// <summary>Returns true if a pet in available for adoption at Marnie's.</summary>
+        public bool CanAdoptNow()
         {
-            PetInfo = new PotentialPet(petInfo);
-        }
-
-
-        /// <summary>Creates a WildHorse using the save file's given information</summary>
-        internal void LoadWildHorse(List<string> horseInfo)
-        {
-            // If a horse wasn't in town upon save, null information was stored for it
-            if (horseInfo.Count == 1)
-                HorseInfo = null;
-            else if (horseInfo.Count == 4)
-                HorseInfo = new WildHorse(horseInfo);
-            else
-                HorseInfo = null;
-        }
-
-
-        /// <summary>
-        /// Returns the PotentialPet info in the same format that Animal Skinner places it into the save file.
-        /// The first item in the list holds the PotentialPet's type, and the second item should be the PotentialPet's SkinID
-        /// </summary>
-        internal List<string> GetPetSaveInfo()
-        {
-            if (PetInfo == null)
-                this.NewPotentialPet();
-
-            return new List<string> { PetInfo.PetType, PetInfo.SkinID.ToString() };
-        }
-
-
-        /// <summary>
-        /// Returns the current wild horses's information in the same format that Animal Skinner places it in the save file.
-        /// The list will contain, in order and in string format, the SkinID, Map name, Tile.X, and Tile.Y
-        /// </summary>
-        internal List<string> GetHorseSaveInfo()
-        {
-            if (HorseInfo == null)
-                return new List<string> { "null" };
-
-            return new List<string> { HorseInfo.SkinID.ToString(), HorseInfo.Map.Name.ToLower(), HorseInfo.Tile.X.ToString(), HorseInfo.Tile.Y.ToString() };
+            return CanAdopt ? true : false;
         }
 
 
@@ -198,7 +133,13 @@ namespace AnimalSkinner.Framework
         /// <summary>Check to see if the player is attempting to interact with the wild horse</summary>
         internal void HorseCheck(object sender, ButtonPressedEventArgs e)
         {
-            if (HorseInfo != null &&
+            if (HorseInfo != null && HorseInfo.HorseInstance == null && e.Button.Equals(SButton.MouseRight))
+            {
+                Earth.Monitor.Log("NO, BAD", LogLevel.Error);
+                return;
+            }
+
+            if (HorseInfo != null && 
                 e.Button.Equals(SButton.MouseRight) &&
                 HorseInfo.HorseInstance.withinPlayerThreshold(3))
             {
@@ -221,12 +162,8 @@ namespace AnimalSkinner.Framework
             }
         }
 
-        internal void AdoptHorse()
-        {
-            Game1.activeClickableMenu = new NamingMenu(HorseNamer, "What will you name this horse?");
-        }
 
-
+        /// <summary>Adopts and names the wild horse being interacted with. Called in the CheckHorse event handler.</summary>
         internal void HorseNamer(string horseName)
         {
             // Name Horse and add to Animal Skinner database

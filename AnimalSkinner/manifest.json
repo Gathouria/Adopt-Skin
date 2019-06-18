@@ -1,7 +1,7 @@
 ﻿{
   "Name": "Animal Skinner",
   "Author": "Gathouria",
-  "Version": "2.1.1-beta",
+  "Version": "2.2.0-beta",
   "Description": "Randomize and select the skins on your animals, pet, and horse with custom sprites!",
   "UniqueID": "Gathouria.AnimalSkinner",
   "EntryDll": "AnimalSkinner.dll",

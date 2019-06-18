@@ -98,6 +98,42 @@ namespace AnimalSkinner.Framework
                     break;
 
 
+                case "horse_whistle":
+                    if (args.ToList().Count == 1)
+                    {
+                        // Enforce argument constraints
+                        if (!EnforceArgTypeInt(args[0], 1))
+                            break;
+
+                        int callID = int.Parse(args[0]);
+                        foreach (Horse horse in ModEntry.GetHorses())
+                        {
+                            if (horse.Manners == callID)
+                            {
+                                Game1.warpCharacter(horse, Game1.player.currentLocation, Game1.player.getTileLocation());
+                                return;
+                            }
+                        }
+                        // Horse with given ID wasn't found
+                        ModEntry.SMonitor.Log($"No horse exists with the given ID: {callID}", LogLevel.Error);
+                    }
+                    else
+                    {
+                        // Enforce argument constraints
+                        if (!EnforceArgCount(args, 0))
+                            break;
+
+                        // Call the first horse found
+                        foreach (Horse horse in ModEntry.GetHorses())
+                        {
+                            Game1.warpCharacter(horse, Game1.player.currentLocation, Game1.player.getTileLocation());
+                            return;
+                        }
+                        ModEntry.SMonitor.Log("You do not own any horses.", LogLevel.Error);
+                    }
+                    break;
+
+
                 case "corral_horses":
                     // Find the farm's stable
                     Stable horsehut = null;
