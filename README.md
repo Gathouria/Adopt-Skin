@@ -44,7 +44,7 @@ Examples: Dinosaur_1, BabyBlueChicken_1, BlueChicken_1, BabySheep_3, Sheep_3, Sh
 * All sprite files must be placed in Animal Skinner/assets/skins
 
 
-**ADDITION BFAV NOTE:**
+**ADDITIONAL BFAV NOTE:**
 If you're using a BFAV animal with color variants and would like the functionality of additional custom sprites that Animal Skinner adds, note that you will have to do the whole skin set for *each* color variant.
 I.E. BFAV adds a red seagull and a blue seagull. If you want them both to rotate through the same three skins, you will have to make your three skin files say *blueseagull_1*, *blueseagull_2*, and *blueseagull_3*, alongside any blue/sheared sprites, then copy these skins and rename them to have an identical set that is *redseagull_1*, *redseagull_2*, and *redseagull_3*.
 
