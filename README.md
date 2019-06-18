@@ -29,9 +29,11 @@ All farm animals, pets, and horses must be one of the following types (Note on B
 | Horse | - | - |
 
 ** BFAV-added animals must be named in the same format, with their name being the same as it looks in the BFAV config file.
+
 ** Sprite sheet files MUST be named in this fashion for Animal Skinner to parse them:
 
 Examples: Dinosaur_1, BabyBlueChicken_1, BlueChicken_1, BabySheep_3, Sheep_3, ShearedSheep_3, etc.
+
 
 * Type of animal written exactly as shown in the above type list, no spaces
 *  The number following the file name is a unique identifying number
