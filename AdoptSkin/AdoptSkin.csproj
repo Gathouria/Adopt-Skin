@@ -7,8 +7,8 @@
     <ProjectGuid>{C506D237-CC8A-48F2-A129-84D27175B09E}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>AnimalSkinner</RootNamespace>
-    <AssemblyName>AnimalSkinner</AssemblyName>
+    <RootNamespace>AdoptSkin</RootNamespace>
+    <AssemblyName>AdoptSkin</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
@@ -51,7 +51,7 @@
     <Compile Include="Framework\BFAV226Integrator.cs" />
     <Compile Include="ModConfig.cs" />
     <Compile Include="ModEntry.cs" />
-    <Compile Include="Framework\PotentialPet.cs" />
+    <Compile Include="Framework\Stray.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Framework\WildHorse.cs" />
   </ItemGroup>

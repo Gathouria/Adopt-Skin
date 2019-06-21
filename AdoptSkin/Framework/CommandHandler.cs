@@ -11,10 +11,11 @@ using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Characters;
 using StardewValley.Buildings;
+using StardewValley.Menus;
 
-namespace AnimalSkinner.Framework
+namespace AdoptSkin.Framework
 {
-    /// <summary>The SMAPI console command handler for Animal Skinner</summary>
+    /// <summary>The SMAPI console command handler for Adopt & Skin</summary>
     class CommandHandler
     {
         internal ModEntry Earth;
@@ -34,6 +35,34 @@ namespace AnimalSkinner.Framework
         {
             switch (command)
             {
+                case "debug_reset":
+                    ModEntry.AnimalSkinMap = new Dictionary<long, int>();
+                    ModEntry.PetSkinMap = new Dictionary<long, int>();
+                    ModEntry.HorseSkinMap = new Dictionary<long, int>();
+
+                    ModEntry.AnimalLongToShortIDs = new Dictionary<long, int>();
+                    ModEntry.AnimalShortToLongIDs = new Dictionary<int, long>();
+
+                    foreach (Horse horse in ModEntry.GetHorses())
+                        if (horse.Manners != WildHorse.WildID)
+                            horse.Manners = 0;
+                    foreach (Pet pet in ModEntry.GetPets())
+                        if (pet.Manners != Stray.StrayID)
+                            pet.Manners = 0;
+
+                    foreach (Horse horse in ModEntry.GetHorses())
+                        if (horse.Manners != WildHorse.WildID)
+                            Earth.AddCreature(horse);
+                    foreach (Pet pet in ModEntry.GetPets())
+                        if (pet.Manners != Stray.StrayID)
+                            Earth.AddCreature(pet);
+                    foreach (FarmAnimal animal in ModEntry.GetAnimals())
+                        Earth.AddCreature(animal);
+
+
+                    break;
+
+
                 case "debug_idmaps":
                     ModEntry.SMonitor.Log($"Animals Long to Short:\n{string.Join("\n", ModEntry.AnimalLongToShortIDs)}", LogLevel.Info);
                     ModEntry.SMonitor.Log($"Animals Short to Long equal length: {ModEntry.AnimalLongToShortIDs.Count == ModEntry.AnimalShortToLongIDs.Count}", LogLevel.Alert);
@@ -91,7 +120,7 @@ namespace AnimalSkinner.Framework
                     {
                         if (horse.Manners == id)
                         {
-                            ModEntry.SMonitor.Log($"{horse.Name} located at: {horse.currentLocation}\n{horse.position.X}, {horse.position.Y}\nVector: {horse.position.Value}", LogLevel.Alert);
+                            ModEntry.SMonitor.Log($"{horse.Name} located at: {horse.currentLocation} | {horse.getTileX()}, {horse.getTileY()}", LogLevel.Alert);
                         }
                     }
 
@@ -124,12 +153,7 @@ namespace AnimalSkinner.Framework
                             break;
 
                         // Call the first horse found
-                        foreach (Horse horse in ModEntry.GetHorses())
-                        {
-                            Game1.warpCharacter(horse, Game1.player.currentLocation, Game1.player.getTileLocation());
-                            return;
-                        }
-                        ModEntry.SMonitor.Log("You do not own any horses.", LogLevel.Error);
+                        Earth.CallHorse();
                     }
                     break;
 
@@ -159,6 +183,59 @@ namespace AnimalSkinner.Framework
                     }
 
                     ModEntry.SMonitor.Log("All horses have been warped to the stable.", LogLevel.Alert);
+
+                    break;
+
+
+                case "sell":
+                    // Enforce argument constraints
+                    if (!EnforceArgCount(args, 2))
+                        break;
+                    if (!EnforceArgTypeCategory(args[0], 1))
+                        break;
+                    if (!EnforceArgTypeInt(args[1], 2))
+                        break;
+
+
+                    string type = ModEntry.Sanitize(args[0]);
+                    int sellID = int.Parse(args[1]);
+                    ModEntry.CreatureCategory sellCategory = ModEntry.CreatureCategory.Animal;
+                    if (type == "horse")
+                    {
+                        if (!ModEntry.HorseSkinMap.ContainsKey(sellID))
+                        {
+                            ModEntry.SMonitor.Log($"Horse with the given ID does not exist: {sellID}", LogLevel.Error);
+                            return;
+                        }
+                        sellCategory = ModEntry.CreatureCategory.Horse;
+                    }
+                    else if (type == "pet")
+                    {
+                        if (!ModEntry.PetSkinMap.ContainsKey(sellID))
+                        {
+                            ModEntry.SMonitor.Log($"Pet with the given ID does not exist: {sellID}", LogLevel.Error);
+                            return;
+                        }
+                        sellCategory = ModEntry.CreatureCategory.Pet;
+                    }
+                    else
+                    {
+                        ModEntry.SMonitor.Log("Go sell that somewhere else.", LogLevel.Error);
+                        return;
+                    }
+
+                    if (sellCategory != ModEntry.CreatureCategory.Animal)
+                    {
+                        Character sellCreature = ModEntry.GetCreature(sellCategory, sellID);
+                        Game1.activeClickableMenu = new ConfirmationDialog($"Are you sure you want to sell your {ModEntry.Sanitize(sellCreature.GetType().Name)}, {sellCreature.Name}?", (who) =>
+                        {
+                            if (Game1.activeClickableMenu is StardewValley.Menus.ConfirmationDialog cd)
+                                cd.cancel();
+
+                            Earth.RemoveCreature(sellCategory, sellID);
+                            Game1.removeThisCharacterFromAllLocations((NPC)sellCreature);
+                        });
+                    }
 
                     break;
 
@@ -248,7 +325,7 @@ namespace AnimalSkinner.Framework
                     {
                         creatureToSkin = ModEntry.GetCreature(ModEntry.CreatureCategory.Horse, shortID);
 
-                        // Ensure that the skin ID given exists in Animal Skinner
+                        // Ensure that the skin ID given exists in Adopt & Skin
                         if (!EnforceArgRange(skinID, ModEntry.HorseAssets[ModEntry.Sanitize(creatureToSkin.GetType().Name)].Count, 1))
                             break;
 
@@ -259,7 +336,7 @@ namespace AnimalSkinner.Framework
                     {
                         creatureToSkin = ModEntry.GetCreature(ModEntry.CreatureCategory.Pet, shortID);
 
-                        // Ensure that the skin ID given exists in Animal Skinner
+                        // Ensure that the skin ID given exists in Adopt & Skin
                         if (!EnforceArgRange(skinID, ModEntry.PetAssets[ModEntry.Sanitize(creatureToSkin.GetType().Name)].Count, 1))
                             break;
 
@@ -271,7 +348,7 @@ namespace AnimalSkinner.Framework
                         FarmAnimal animal = ModEntry.GetCreature(ModEntry.CreatureCategory.Animal, ModEntry.AnimalShortToLongIDs[shortID]) as FarmAnimal;
                         creatureToSkin = animal;
 
-                        // Ensure that the skin ID given exists in Animal Skinner
+                        // Ensure that the skin ID given exists in Adopt & Skin
                         if (!EnforceArgRange(skinID, ModEntry.AnimalAssets[ModEntry.Sanitize(animal.type.Value)].Count, 1))
                             break;
 
@@ -486,7 +563,8 @@ namespace AnimalSkinner.Framework
                 List<string> petInfo = new List<string>();
 
                 foreach (Pet pet in ModEntry.GetPets())
-                    petInfo.Add(GetPrintString(pet));
+                    if (pet.Manners != Stray.StrayID)
+                        petInfo.Add(GetPrintString(pet));
 
                 ModEntry.SMonitor.Log("Pets:", LogLevel.Alert);
                 ModEntry.SMonitor.Log($"{string.Join(", ", petInfo)}", LogLevel.Info);

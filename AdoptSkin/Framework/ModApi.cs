@@ -8,12 +8,12 @@ using StardewModdingAPI;
 
 using StardewValley.Characters;
 
-namespace AnimalSkinner.Framework
+namespace AdoptSkin.Framework
 {
     public class ModApi
     {
         /// <summary>Registers a pet type to handle skin support for.</summary>
-        /// <param name="id">The filename for the pet. This will also be its internal ID within Animal Skinner.</param>
+        /// <param name="id">The filename for the pet. This will also be its internal ID within Adopt & Skin.</param>
         /// <param name="type">The Type for creating a new instance of this pet. This must inherit from Characters.Pet.</param>
         public static void RegisterPetType(string id, Type type)
         {
@@ -33,7 +33,7 @@ namespace AnimalSkinner.Framework
         }
 
         /// <summary>Registers a horse type to handle skin support for.</summary>
-        /// <param name="id">The filename for the horse. This will also be its internal ID within Animal Skinner.</param>
+        /// <param name="id">The filename for the horse. This will also be its internal ID within Adopt & Skin.</param>
         /// <param name="type">The Type for creating a new instance of this horse. This must inherit from Characters.Horse.</param>
         public static void RegisterHorseType(string id, Type type)
         {
@@ -53,7 +53,7 @@ namespace AnimalSkinner.Framework
         }
 
         /// <summary>Registers an animal type to handle skin support for.</summary>
-        /// <param name="id">The filename for the animal. This will also be its internal ID within Animal Skinner.</param>
+        /// <param name="id">The filename for the animal. This will also be its internal ID within Adopt & Skin.</param>
         /// <param name="hasBaby">If this animal type has a baby skin.</param>
         /// <param name="canShear">If this animal type has a sheared skin.</param>
         public static void RegisterAnimalType(string id, bool hasBaby = true, bool canShear = false)
@@ -100,7 +100,7 @@ namespace AnimalSkinner.Framework
         }
 
 
-        /// <summary>Returns all handled types Animal Skinner is currently handling.</summary>
+        /// <summary>Returns all handled types Adopt & Skin is currently handling.</summary>
         public static List<string> GetHandledAllTypes()
         {
             List<string> defaultTypes = new List<string>();
@@ -112,7 +112,7 @@ namespace AnimalSkinner.Framework
         }
 
 
-        /// <summary>Returns all animal types Animal Skinner is currently handling.</summary>
+        /// <summary>Returns all animal types Adopt & Skin is currently handling.</summary>
         public static List<string> GetHandledAnimalTypes()
         {
             List<string> handledAnimals = new List<string>();
@@ -124,7 +124,7 @@ namespace AnimalSkinner.Framework
         }
 
 
-        /// <summary>Returns all pet types Animal Skinner is currently handling.</summary>
+        /// <summary>Returns all pet types Adopt & Skin is currently handling.</summary>
         public static List<string> GetHandledPetTypes()
         {
             List<string> handledPets = new List<string>();
@@ -136,7 +136,7 @@ namespace AnimalSkinner.Framework
         }
 
 
-        /// <summary>Returns all horse types Animal Skinner is currently handling.</summary>
+        /// <summary>Returns all horse types Adopt & Skin is currently handling.</summary>
         public static List<string> GetHandledHorseTypes()
         {
             List<string> handledHorses = new List<string>();

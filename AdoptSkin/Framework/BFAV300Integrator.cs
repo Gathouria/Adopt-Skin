@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 
 using StardewModdingAPI;
 
-namespace AnimalSkinner.Framework
+namespace AdoptSkin.Framework
 {
-    public interface IModApi
+    public interface IModApiBFAVBeta
     {
-        Dictionary<string, string[]> GetFarmAnimalsByCategory(string str);
+        Dictionary<string, List<string>> GetFarmAnimalCategories();
     }
 
 
@@ -18,15 +18,15 @@ namespace AnimalSkinner.Framework
     /// Upon instantiation, checks whether Better Farm Animal Variety is a loaded mod, then allows skin control for BFAV added animals
     /// ** THIS IS ONLY FOR THE CURRENT BFAV PUBLISHED VERSION, VERSION 2.2.6 **
     /// </summary>
-    class BFAV226Integrator
+    class BFAV300Integrator
     {
-        internal IModApi BFAVApi;
+        internal IModApiBFAVBeta BFAVApi;
 
-        public BFAV226Integrator()
+        public BFAV300Integrator()
         {
             if (ModEntry.SHelper.ModRegistry.IsLoaded("Paritee.BetterFarmAnimalVariety"))
             {
-                BFAVApi = ModEntry.SHelper.ModRegistry.GetApi<IModApi>("Paritee.BetterFarmAnimalVariety");
+                BFAVApi = ModEntry.SHelper.ModRegistry.GetApi<IModApiBFAVBeta>("Paritee.BetterFarmAnimalVariety");
                 RegisterBFAVAnimals();
             }
         }
@@ -42,9 +42,9 @@ namespace AnimalSkinner.Framework
 
         public void RegisterBFAVAnimals()
         {
-            Dictionary<string, string[]> bfavAnimals = BFAVApi.GetFarmAnimalsByCategory("2");
+            Dictionary<string, List<string>> bfavAnimals = BFAVApi.GetFarmAnimalCategories();
 
-            foreach (KeyValuePair<string, string[]> pair in bfavAnimals)
+            foreach (KeyValuePair<string, List<string>> pair in bfavAnimals)
             {
                 foreach (string type in pair.Value)
                 {
@@ -64,7 +64,7 @@ namespace AnimalSkinner.Framework
             }
 
         }
-        
+
 
 
     }

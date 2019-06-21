@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 using StardewValley.Characters;
 
-namespace AnimalSkinner.Framework
+namespace AdoptSkin.Framework
 {
-    /// <summary>The representation of a skin within Animal Skinner.</summary>
+    /// <summary>The representation of a skin within Adopt & Skin.</summary>
     public class AnimalSkin
     {
         /*********

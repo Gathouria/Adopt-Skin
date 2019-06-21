@@ -4,6 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
+using xTile.Layers;
+using xTile.Dimensions;
+using xTile.Tiles;
 
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -13,7 +16,7 @@ using StardewValley.Menus;
 using StardewValley.Characters;
 using StardewValley.Buildings;
 
-namespace AnimalSkinner.Framework
+namespace AdoptSkin.Framework
 {
     class CreationHandler
     {
@@ -24,14 +27,14 @@ namespace AnimalSkinner.Framework
         /// <summary>Randomizer for logic within CreationHandler instances.</summary>
         private readonly Random Randomizer = new Random();
 
-        /// <summary>Reference to Animal Skinner's ModEntry. Used to access creature information and print information to the monitor when necessary.</summary>
+        /// <summary>Reference to Adopt & Skin's ModEntry. Used to access creature information and print information to the monitor when necessary.</summary>
         internal ModEntry Earth;
 
         /// <summary>Whether or not a potential pet is available for adoption at Marnie's currently</summary>
         internal bool CanAdopt;
 
         /// <summary>The pet available for adoption at Marnies for the current day.</summary>
-        internal PotentialPet PetInfo = null;
+        internal Stray StrayInfo = null;
         /// <summary>The wild horse available for adoption somewhere in the map. This variable is null if there is no current wild horse.</summary>
         internal WildHorse HorseInfo = null;
 
@@ -51,17 +54,20 @@ namespace AnimalSkinner.Framework
         /// <summary>Resets variables that change each day</summary>
         internal void ProcessNewDay(object sender, DayStartedEventArgs e)
         {
-            Earth.Monitor.Log("It's a beautiful (new) day outside.", LogLevel.Warn);
-            NewPotentialPet();
-            NewWildHorse();
+            NewStray();
+            if (ModEntry.Config.WildHorses)
+                NewWildHorse();
         }
 
 
-        /// <summary>Creates a new PotentialPet at Marnie's. Used for new save files.</summary>
-        internal void NewPotentialPet()
+        /// <summary>Creates a new Stray at Marnie's. Used for new save files.</summary>
+        internal void NewStray()
         {
-            PetInfo = new PotentialPet();
-            CanAdopt = true;
+            // If a Stray was around yesterday, remove it from the map
+            if (StrayInfo != null)
+                StrayInfo.RemoveFromWorld();
+
+            StrayInfo = new Stray();
         }
 
 
@@ -85,6 +91,7 @@ namespace AnimalSkinner.Framework
             }
         }
 
+
         /// <summary>Returns true if a pet in available for adoption at Marnie's.</summary>
         public bool CanAdoptNow()
         {
@@ -100,25 +107,69 @@ namespace AnimalSkinner.Framework
          ** P E T   A D O P T I O N **
          *****************************/
 
-        // ** TODO: Function with dialogue asking if you wish to adopt this stray **
+        /// <summary>Places the pet bed in Marnie's</summary>
+        internal void PlaceBetBed()
+        {
+            GameLocation marnies = Game1.getLocationFromName("AnimalShop");
+            TileSheet tileSheet = new xTile.Tiles.TileSheet("PetBed", marnies.map, Earth.Helper.Content.GetActualAssetKey("assets/petbed.png"), new xTile.Dimensions.Size(1, 1), new xTile.Dimensions.Size(16, 15));
+            marnies.map.AddTileSheet(tileSheet);
+            Layer buildingLayer = marnies.map.GetLayer("Buildings");
+            buildingLayer.Tiles[17, 15] = new StaticTile(buildingLayer, tileSheet, BlendMode.Additive, 0);
+        }
 
+
+        
         internal void AdoptPet()
         {
             Game1.activeClickableMenu = new NamingMenu(PetNamer, "Name:");
         }
+        
 
 
+        /// <summary>Check to see if the player is attempting to interact with the stray</summary>
+        internal void StrayCheck(object sender, ButtonPressedEventArgs e)
+        {
+            if (StrayInfo != null &&
+                e.Button.Equals(SButton.MouseRight) &&
+                StrayInfo.PetInstance.withinPlayerThreshold(3))
+            {
+                if ((int)e.Cursor.Tile.X >= StrayInfo.PetInstance.getLeftMostTileX().X && (int)e.Cursor.Tile.X <= StrayInfo.PetInstance.getRightMostTileX().X &&
+                    (int)e.Cursor.Tile.Y >= StrayInfo.PetInstance.getTileY() - 1 && (int)e.Cursor.Tile.Y <= StrayInfo.PetInstance.getTileY() + 1)
+                {
+
+                    Game1.activeClickableMenu = new ConfirmationDialog("This is one of the strays that Marnie has taken in. \n\n" +
+                        $"The animal is wary, but curious. Will you adopt this {ModEntry.Sanitize(StrayInfo.PetInstance.GetType().Name)}?", (who) =>
+                    {
+                        if (Game1.activeClickableMenu is StardewValley.Menus.ConfirmationDialog cd)
+                            cd.cancel();
+
+                        Game1.activeClickableMenu = new NamingMenu(PetNamer, $"What will you name it?");
+                    }, (who) =>
+                    {
+                        // Exit the naming menu
+                        Game1.drawObjectDialogue($"You leave the little one to rest for now. Marnie will take good care of it.");
+                    });
+                }
+            }
+        }
+
+
+        /// <summary>Adopts and names the stray being interacted with. Called in the CheckStray event handler.</summary>
         internal void PetNamer(string petName)
         {
-            Pet pet = PetInfo.CreatePet(petName);
-            Earth.AddCreature(pet, PetInfo.SkinID);
-            pet.warpToFarmHouse(Game1.player);
+            // Name Pet and add to Adopt & Skin database
+            StrayInfo.PetInstance.Name = petName;
+            StrayInfo.PetInstance.displayName = petName;
+            Earth.AddCreature(StrayInfo.PetInstance, StrayInfo.SkinID);
 
-            // Disable adoption again for today
-            CanAdopt = false;
+            // Warp the new Pet to the farmhouse
+            StrayInfo.PetInstance.warpToFarmHouse(Game1.player);
+
+            // Pet is no longer a Stray to keep track of
+            StrayInfo = null;
 
             // Exit the naming menu
-            Game1.drawObjectDialogue($"Adopted {petName}.");
+            Game1.drawObjectDialogue($"{petName} was brought home.");
         }
 
 
@@ -133,12 +184,6 @@ namespace AnimalSkinner.Framework
         /// <summary>Check to see if the player is attempting to interact with the wild horse</summary>
         internal void HorseCheck(object sender, ButtonPressedEventArgs e)
         {
-            if (HorseInfo != null && HorseInfo.HorseInstance == null && e.Button.Equals(SButton.MouseRight))
-            {
-                Earth.Monitor.Log("NO, BAD", LogLevel.Error);
-                return;
-            }
-
             if (HorseInfo != null && 
                 e.Button.Equals(SButton.MouseRight) &&
                 HorseInfo.HorseInstance.withinPlayerThreshold(3))
@@ -166,7 +211,7 @@ namespace AnimalSkinner.Framework
         /// <summary>Adopts and names the wild horse being interacted with. Called in the CheckHorse event handler.</summary>
         internal void HorseNamer(string horseName)
         {
-            // Name Horse and add to Animal Skinner database
+            // Name Horse and add to Adopt & Skin database
             HorseInfo.HorseInstance.Name = horseName;
             HorseInfo.HorseInstance.displayName = horseName;
             Earth.AddCreature(HorseInfo.HorseInstance, HorseInfo.SkinID);
