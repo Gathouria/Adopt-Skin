@@ -9,6 +9,7 @@ using StardewModdingAPI;
 
 using StardewValley;
 using StardewValley.Characters;
+using StardewValley.Menus;
 
 namespace AdoptSkin.Framework
 {
@@ -52,7 +53,11 @@ namespace AdoptSkin.Framework
             Game1.warpCharacter(HorseInstance, Map, Tile);
 
             if (ModEntry.Config.DetailedConsoleOutput)
-                ModEntry.SMonitor.Log($"A wild horse has been spotted at: {Map.Name} -- {Tile.X}, {Tile.Y}", LogLevel.Debug);
+            {
+                string message = $"A wild horse has been spotted at: {Map.Name} -- {Tile.X}, {Tile.Y}";
+                ModEntry.SMonitor.Log(message, LogLevel.Debug);
+                Game1.chatBox.addInfoMessage(message);
+            }
         }
 
 
