@@ -54,6 +54,7 @@
     <Compile Include="Framework\Stray.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Framework\WildHorse.cs" />
+    <Compile Include="SaveLoadHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="manifest.json" />

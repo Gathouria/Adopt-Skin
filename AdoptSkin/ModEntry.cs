@@ -15,7 +15,7 @@ using StardewValley;
 using StardewValley.Characters;
 using StardewValley.Menus;
 using StardewValley.Locations;
-using StardewValley.TerrainFeatures;
+using StardewValley.Buildings;
 
 namespace AdoptSkin
 {
@@ -27,22 +27,10 @@ namespace AdoptSkin
         ** Fields
         *************************/
 
-        /// <summary>The file extensions recognised by the mod.</summary>
-        private readonly HashSet<string> ValidExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase)
-        {
-            ".png",
-            ".xnb"
-        };
-
-        /// <summary>The RNG used for selecting randomized items</summary>
         private readonly Random Randomizer = new Random();
 
-        /// <summary>Allowable custom creature group denotations for use in commands</summary>
-        internal static readonly List<string> CreatureGroups = new List<string>() { "all", "animal", "coop", "barn", "chicken", "cow", "pet", "horse" };
-
-        /// <summary>Recognized major creature categories</summary>
         internal enum CreatureCategory { Horse, Pet, Animal };
-
+        
         internal static ModConfig Config;
 
 
@@ -58,11 +46,12 @@ namespace AdoptSkin
         internal static IModHelper SHelper;
         internal static IMonitor SMonitor;
 
-        // Pet and Horse creation handler
-        internal CreationHandler Creator;
-
         // SMAPI console command handler
-        internal CommandHandler Commander;
+        internal static CommandHandler Commander;
+        // Pet and Horse creation handler
+        internal static CreationHandler Creator;
+        // Save/Load logic handler
+        internal static SaveLoadHandler SaverLoader;
 
         // Mod integration
         internal static BFAV226Integrator BFAV226Worker;
@@ -78,28 +67,22 @@ namespace AdoptSkin
         internal static Dictionary<long, int> PetSkinMap = new Dictionary<long, int>();
         internal static Dictionary<long, int> HorseSkinMap = new Dictionary<long, int>();
 
-        // Pet and Horse string to type mappings
-        internal static Dictionary<string, Type> PetTypeMap = new Dictionary<string, Type>();
-        internal static Dictionary<string, Type> HorseTypeMap = new Dictionary<string, Type>();
-
         // Short ID mappings. Short IDs are small, user-friendly numbers for referencing specific creatures.
         internal static Dictionary<long, int> AnimalLongToShortIDs = new Dictionary<long, int>();
         internal static Dictionary<int, long> AnimalShortToLongIDs = new Dictionary<int, long>();
 
-        // Tracks last known animal count. Used to check whether the animal mappings should be updated.
-        internal int AnimalCount = 0;
+        // Pet and Horse string to type mappings
+        internal static Dictionary<string, Type> PetTypeMap = new Dictionary<string, Type>();
+        internal static Dictionary<string, Type> HorseTypeMap = new Dictionary<string, Type>();
 
-        // Track whether assets have been loaded
-        internal bool AssetsReady = false;
+        // Ridden horse holder
+        internal static List<Horse> BeingRidden = new List<Horse>();
+        // Last known FarmAnimal count
+        internal static int AnimalCount = 0;
+        // Test to display on tooltip for Pet or Horse, if any
+        internal static string HoverText;
 
-        // Horse holder, to make sure multi-horses don't disappear on dismount
-        internal List<Horse> BeingRidden = new List<Horse>();
-
-        // Tracker to check whether the player has received their first pet, and is allowed to adopt strays
-        internal bool FirstPetReceived = false;
-
-        // Tracks the text to display on hover over a pet or horse, if any
-        internal string HoverText;
+        internal static bool AssetsLoaded = false;
 
 
 
@@ -121,33 +104,27 @@ namespace AdoptSkin
             // Config settings
             Config = this.Helper.ReadConfig<ModConfig>();
 
-            // Pet and Horse creation handler
-            Creator = new CreationHandler(this);
-
             // SMAPI console command handler
             Commander = new CommandHandler(this);
+            // Pet and Horse creation handler
+            Creator = new CreationHandler(this);
+            // Save/Load logic handler
+            SaverLoader = new SaveLoadHandler(this);
 
             // Event Listeners
-            helper.Events.GameLoop.SaveLoaded += this.Setup;
-            helper.Events.GameLoop.SaveLoaded += this.LoadData;
-            helper.Events.GameLoop.Saving += this.SaveData;
-            helper.Events.GameLoop.Saved += this.LoadData;
+            helper.Events.GameLoop.SaveLoaded += SaveLoadHandler.Setup;
+            helper.Events.GameLoop.SaveLoaded += SaveLoadHandler.LoadData;
+            helper.Events.GameLoop.Saving += SaveLoadHandler.SaveData;
+            helper.Events.GameLoop.Saved += SaveLoadHandler.LoadData;
+            helper.Events.GameLoop.ReturnedToTitle += SaveLoadHandler.StopUpdateChecks;
 
-            helper.Events.GameLoop.ReturnedToTitle += this.StopUpdateOnTick;
-
-            helper.Events.World.NpcListChanged += this.SaveTheHorse;
-            helper.Events.World.NpcListChanged += this.CheckForFirstPet;
-            helper.Events.World.NpcListChanged += this.CheckForFirstHorse;
             helper.Events.GameLoop.DayStarted += Creator.ProcessNewDay;
-            helper.Events.Input.ButtonPressed += Creator.HorseCheck;
-            helper.Events.Input.ButtonPressed += Creator.StrayCheck;
-            helper.Events.Input.ButtonReleased += this.HorseWhistleCheck;
-
-            helper.Events.Display.RenderingHud += this.RenderHoverTooltip;
+            helper.Events.GameLoop.DayEnding += Creator.ProcessEndDay;
+            helper.Events.Display.RenderingHud += RenderHoverTooltip;
 
 
             // SMAPI Commands
-            helper.ConsoleCommands.Add("list_creatures", $"Lists the creature IDs and skin IDs of the given type.\n(Options: '{string.Join("', '", CreatureGroups)}', or a specific animal type (such as bluechicken))", Commander.OnCommandReceived);
+            helper.ConsoleCommands.Add("list_creatures", $"Lists the creature IDs and skin IDs of the given type.\n(Options: '{string.Join("', '", CommandHandler.CreatureGroups)}', or a specific animal type (such as bluechicken))", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("randomize_all_skins", "Randomizes the skins for every farm animal, pet, and horse on the farm.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("randomize_skin", "Randomizes the skin for the given creature. Call `randomize_skin <animal/pet/horse> <creature ID>`. To find a creature's ID, call `list_creatures`.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("set_skin", "Sets the skin of the given creature to the given skin ID. Call `set_skin <skin ID> <animal/pet/horse> <creature ID>`. To find a creature's ID, call `list_creatures`.", Commander.OnCommandReceived);
@@ -161,11 +138,12 @@ namespace AdoptSkin
                 helper.ConsoleCommands.Add("debug_reset", "DEBUG: ** WARNING ** Resets all skins and creature IDs, but ensures that all creatures are properly in the Adopt & Skin system.", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_skinmaps", "DEBUG: Prints all info in current skin maps", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_idmaps", "DEBUG: Prints AnimalLongToShortIDs", Commander.OnCommandReceived);
-                helper.ConsoleCommands.Add("debug_manners", "DEBUG: Print all manners", Commander.OnCommandReceived);
-                helper.ConsoleCommands.Add("debug_horses", "DEBUG: Print all horses that exist on the map, not just player-owned ones", Commander.OnCommandReceived);
-                helper.ConsoleCommands.Add("find_horse", "DEBUG: Find where the heck dat horse at. Format: debug_find_horse <horse ID>.", Commander.OnCommandReceived);
-                helper.ConsoleCommands.Add("adopt_pet", "DEBUG: Add pet. Warp to farm.", Commander.OnCommandReceived);
+                helper.ConsoleCommands.Add("debug_pets", "DEBUG: Print the information for every Pet instance on the map", Commander.OnCommandReceived);
+                helper.ConsoleCommands.Add("debug_horses", "DEBUG: Print the information for every Horse instance on the map", Commander.OnCommandReceived);
+                helper.ConsoleCommands.Add("debug_find", "DEBUG: Locate the creature with the given ID. Call `debug_find <horse/pet/animal> <creature ID>`.", Commander.OnCommandReceived);
+                helper.ConsoleCommands.Add("summon_stray", "DEBUG: Summons a new stray at Marnie's.", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("summon_horse", "DEBUG: Summons a wild horse. Somewhere.", Commander.OnCommandReceived);
+                helper.ConsoleCommands.Add("debug_clearunowned", "DEBUG: Removes any wild horses or strays that exist, to clear out glitched extras", Commander.OnCommandReceived);
             }
 
         }
@@ -185,6 +163,7 @@ namespace AdoptSkin
         /// <param name="asset">A helper which encapsulates metadata about an asset and enables changes to it.</param>
         public void Edit<T>(IAssetData asset)
         {
+            // Add the letter Marnie sends regarding the stray animals
             if (asset.AssetNameEquals("Data/mail"))
             {
                 IDictionary<string, string> data = asset.AsDictionary<string, string>().Data;
@@ -239,6 +218,32 @@ namespace AdoptSkin
         /************************
         ** Protected / Internal
         *************************/
+
+        /// <summary>Calls a horse that the player owns to the player's location</summary>
+        internal static void CallHorse()
+        {// Make sure that the player is calling the horse while outside
+            if (!Game1.player.currentLocation.IsOutdoors)
+            {
+                ModEntry.SMonitor.Log("You cannot call for a horse while indoors.", LogLevel.Alert);
+                Game1.chatBox.addInfoMessage("You hear your Grandfather's voice echo in your head.. \"Now is not the time to use that.\"");
+                return;
+            }
+
+            // Teleport the first horse you find that the player actually owns
+            foreach (Horse taxi in GetHorses())
+            {
+                if (HorseSkinMap.ContainsKey(taxi.Manners))
+                {
+                    Game1.warpCharacter(taxi, Game1.player.currentLocation, Game1.player.getTileLocation());
+                    return;
+                }
+            }
+
+            // Player doesn't own a horse yet
+            ModEntry.SMonitor.Log("You do not own any horse that you can call.", LogLevel.Alert);
+            Game1.chatBox.addInfoMessage("Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"");
+        }
+
 
         /// <summary>Returns the creature of the given category and ID</summary>
         internal static Character GetCreature(CreatureCategory creatureCategory, long id)
@@ -490,10 +495,15 @@ namespace AdoptSkin
         ** Save/Load/Update logic
         *************************/
 
-
-        private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
+        internal static void UpdateScream(object sender, UpdateTickedEventArgs e)
         {
-            // Check if a horse being ridden has been dismounted. If so, re-add it to the map.
+            SMonitor.Log("UPDATE TICK", LogLevel.Alert);
+        }
+
+        internal void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
+        {
+
+            // -- Check if a horse being ridden has been dismounted. If so, re-add it to the map. --
             List<Horse> dismounted = new List<Horse>();
             foreach (Horse horse in BeingRidden)
             {
@@ -509,13 +519,13 @@ namespace AdoptSkin
                     horse.squeezeForGate();
                 }
             }
-
             // Remove any dismounted horses from the list of horses currently being ridden
             if (dismounted.Count > 0)
                 foreach (Horse horse in dismounted)
                     BeingRidden.Remove(horse);
 
-            // Check that animal list is up to date. If not, add/remove animal in system.
+
+            // -- Check that animal list is up to date. If not, add/remove animal in system. --
             if (Game1.getFarm() != null && AnimalCount != Game1.getFarm().getAllFarmAnimals().Count)
             {
                 List<long> existingAnimals = new List<long>();
@@ -524,24 +534,18 @@ namespace AdoptSkin
                 // Check for new animals and populate lists containing existing and new animals
                 foreach (FarmAnimal animal in GetAnimals())
                 {
-                    // New animal was found
                     if (!AnimalSkinMap.ContainsKey(animal.myID.Value))
-                        // Remember new animals
                         newAnimals.Add(animal);
-
-                    // Remember pre-existing animals
                     else
                         existingAnimals.Add(animal.myID.Value);
                 }
 
-                // Check for removed animals, comparing with the list of existing IDs found above
+                // Check for removed animals
                 List<long> animalsToRemove = new List<long>();
                 foreach (long id in AnimalSkinMap.Keys)
-                    // Removed animal has been found
                     if (!existingAnimals.Contains(id))
                         animalsToRemove.Add(id);
-
-                // Remove animals found to be gone
+                // Remove animals no longer on farm
                 foreach (long id in animalsToRemove)
                     RemoveCreature(CreatureCategory.Animal, id);
 
@@ -554,28 +558,24 @@ namespace AdoptSkin
             }
 
 
-            // Display name tooltips when hovering over a pet or horse
+            // -- Display name tooltips when hovering over a pet or horse
             bool isHovering = false;
             Vector2 mousePos = new Vector2(Game1.getOldMouseX() + Game1.viewport.X, Game1.getOldMouseY() + Game1.viewport.Y) / Game1.tileSize;
 
             // Show pet tooltip
             foreach (Pet pet in GetPets())
-            {
                 if (IsWithinSpriteBox(mousePos, pet))
                 {
                     isHovering = true;
                     HoverText = pet.displayName;
                 }
-            }
             // Show horse tooltip
             foreach (Horse horse in GetHorses())
-            {
                 if (IsWithinSpriteBox(mousePos, horse))
                 {
                     isHovering = true;
                     HoverText = horse.displayName;
                 }
-            }
 
             // Clear hover text when not hovering over a pet or horse
             if (!isHovering)
@@ -585,15 +585,8 @@ namespace AdoptSkin
         }
 
 
-        /// <summary>Stops Adopt & Skin from updating at each tick</summary>
-        private void StopUpdateOnTick(object s, EventArgs e)
-        {
-            this.Helper.Events.GameLoop.UpdateTicked -= this.OnUpdateTicked;
-        }
-
-
         /// <summary>Handler to remember the current horses being ridden, such that they can be manually re-added, preventing the disappearence of dismounted multihorses.</summary>
-        private void SaveTheHorse(object sender, NpcListChangedEventArgs e)
+        internal static void SaveTheHorse(object sender, NpcListChangedEventArgs e)
         {
             foreach (NPC npc in e.Removed)
                 if (npc is Horse horse && horse.rider != null && horse.Manners != 0)
@@ -602,7 +595,7 @@ namespace AdoptSkin
 
 
         /// <summary>Checks for the arrival of the player's first pet and adds it to the system.</summary>
-        private void CheckForFirstPet(object sender, NpcListChangedEventArgs e)
+        internal void CheckForFirstPet(object sender, NpcListChangedEventArgs e)
         {
             // Check for the arrival of the vanilla pet and add it to the system.
             if (PetSkinMap.Count == 0)
@@ -612,7 +605,7 @@ namespace AdoptSkin
                     {
                         AddCreature(pet);
                         this.Helper.Events.World.NpcListChanged -= this.CheckForFirstPet;
-                        this.Helper.Events.GameLoop.DayStarted += this.PlaceBedTomorrow;
+                        this.Helper.Events.GameLoop.DayStarted += PlaceBedTomorrow;
                         Game1.addMailForTomorrow("MarnieStrays");
                         return;
                     }
@@ -621,7 +614,7 @@ namespace AdoptSkin
 
 
         /// <summary>Checks for the arrival of the player's first horse and adds it to the system.</summary>
-        private void CheckForFirstHorse(object sender, NpcListChangedEventArgs e)
+        internal void CheckForFirstHorse(object sender, NpcListChangedEventArgs e)
         {
             // Check for the arrival of the vanilla horse and add it to the system.
             if (HorseSkinMap.Count == 0)
@@ -629,55 +622,81 @@ namespace AdoptSkin
                 foreach (NPC npc in e.Added)
                     if (npc is Horse horse)
                     {
+                        // A tractor is not your first horse
+                        if (horse.Name.StartsWith("tractor/"))
+                            break;
+
                         AddCreature(horse);
+                        Creator.FirstHorseReceived = true;
                         this.Helper.Events.World.NpcListChanged -= this.CheckForFirstHorse;
                         return;
                     }
+            }
+            // Horse already known
+            else
+            {
+                Creator.FirstHorseReceived = true;
+                this.Helper.Events.World.NpcListChanged -= this.CheckForFirstHorse;
+                return;
             }
         }
 
 
         /// <summary>Helper to place the pet bed in Marnie's on the day after the first pet is received</summary>
-        private void PlaceBedTomorrow(object sender, DayStartedEventArgs e)
+        internal static void PlaceBedTomorrow(object sender, DayStartedEventArgs e)
         {
             Creator.PlaceBetBed();
             // Remove self from day update after bed has been placed
-            this.Helper.Events.GameLoop.DayStarted -= this.PlaceBedTomorrow;
+            SHelper.Events.GameLoop.DayStarted -= PlaceBedTomorrow;
         }
 
 
         /// <summary>Check for the Horse Whistle hotkey to be pressed, and execute CallHorse() if necessary</summary>
-        private void HorseWhistleCheck(object sender, ButtonReleasedEventArgs e)
+        internal static void HorseWhistleCheck(object sender, ButtonReleasedEventArgs e)
         {
-            if (e.Button.ToString().ToLower() == Config.HorseWhistleKey.ToLower())
+            if (Context.IsPlayerFree && e.Button.ToString().ToLower() == Config.HorseWhistleKey.ToLower())
             {
                 CallHorse();
             }
         }
 
 
-        /// <summary>Calls a horse that the player owns to the player's location</summary>
-        internal void CallHorse()
+        /// <summary>Refreshes the given animal, pet, or horse's skin texture with the one Adopt & Skin has saved for it.</summary>
+        internal void UpdateSkin(Character creature)
         {
-            // Make sure that the player is calling the horse while outside
-            if (!Game1.player.currentLocation.IsOutdoors)
+            switch (creature)
             {
-                this.Monitor.Log("You hear your Grandfather's voice echo in your head.. \"Now is not the time to use that.\"", LogLevel.Alert);
-                return;
-            }
+                case Horse horse:
+                    if (Creator.HorseInfo != null && horse.Manners == WildHorse.WildID)
+                    {
+                        horse.Sprite = new AnimatedSprite(GetSkinFromID(horse.GetType().Name, Creator.HorseInfo.SkinID).AssetKey, 0, 32, 32);
+                        break;
+                    }
+                    AnimalSkin horseSkin = GetSkin(horse);
+                    if (horseSkin != null && horse.Sprite.textureName.Value != horseSkin.AssetKey)
+                        horse.Sprite = new AnimatedSprite(horseSkin.AssetKey, 7, 32, 32);
+                    break;
 
-            // Teleport the first horse you find that the player actually owns
-            foreach (Horse taxi in GetHorses())
-            {
-                if (HorseSkinMap.ContainsKey(taxi.Manners))
-                {
-                    Game1.warpCharacter(taxi, Game1.player.currentLocation, Game1.player.getTileLocation());
-                    return;
-                }
-            }
+                case Pet pet:
+                    if (Creator.StrayInfo != null && pet.Manners == Stray.StrayID)
+                    {
+                        pet.Sprite = new AnimatedSprite(GetSkinFromID(pet.GetType().Name, Creator.StrayInfo.SkinID).AssetKey, 28, 32, 32);
+                        break;
+                    }
+                    AnimalSkin petSkin = GetSkin(pet);
+                    if (petSkin != null && pet.Sprite.textureName.Value != petSkin.AssetKey)
+                        pet.Sprite = new AnimatedSprite(petSkin.AssetKey, 28, 32, 32);
+                    break;
 
-            // Player doesn't own a horse yet
-            ModEntry.SMonitor.Log($"Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"", LogLevel.Alert);
+                case FarmAnimal animal:
+                    AnimalSkin animalSkin = GetSkin(animal);
+                    if (animalSkin != null && animal.Sprite.textureName.Value != animalSkin.AssetKey)
+                        animal.Sprite = new AnimatedSprite(animalSkin.AssetKey, 0, animal.frontBackSourceRect.Width, animal.frontBackSourceRect.Height);
+                    break;
+
+                default:
+                    break;
+            }
         }
 
 
@@ -781,157 +800,13 @@ namespace AdoptSkin
         }
 
 
-        /// <summary>Refreshes the given animal, pet, or horse's skin texture with the one Adopt & Skin has saved for it.</summary>
-        internal void UpdateSkin(Character creature)
-        {
-            switch (creature)
-            {
-                case Horse horse:
-                    if (Creator.HorseInfo != null && horse.Manners == WildHorse.WildID)
-                    {
-                        horse.Sprite = new AnimatedSprite(GetSkinFromID(horse.GetType().Name, Creator.HorseInfo.SkinID).AssetKey, 0, 32, 32);
-                        break;
-                    }
-                    AnimalSkin horseSkin = GetSkin(horse);
-                    if (horseSkin != null && horse.Sprite.textureName.Value != horseSkin.AssetKey)
-                        horse.Sprite = new AnimatedSprite(horseSkin.AssetKey, 7, 32, 32);
-                    break;
-
-                case Pet pet:
-                    if (Creator.StrayInfo != null && pet.Manners == Stray.StrayID)
-                    {
-                        pet.Sprite = new AnimatedSprite(GetSkinFromID(pet.GetType().Name, Creator.StrayInfo.SkinID).AssetKey, 28, 32, 32);
-                        break;
-                    }
-                    AnimalSkin petSkin = GetSkin(pet);
-                    if (petSkin != null && pet.Sprite.textureName.Value != petSkin.AssetKey)
-                        pet.Sprite = new AnimatedSprite(petSkin.AssetKey, 28, 32, 32);
-                    break;
-
-                case FarmAnimal animal:
-                    AnimalSkin animalSkin = GetSkin(animal);
-                    if (animalSkin != null && animal.Sprite.textureName.Value != animalSkin.AssetKey)
-                        animal.Sprite = new AnimatedSprite(animalSkin.AssetKey, 0, animal.frontBackSourceRect.Width, animal.frontBackSourceRect.Height);
-                    break;
-
-                default:
-                    break;
-            }
-        }
 
 
-        private void LoadData(object s, EventArgs e)
-        {
-            // Only allow the host player to load Adopt & Skin data
-            if (!Context.IsMainPlayer)
-            {
-                this.Monitor.Log("Multiplayer Farmhand detected. Adopt & Skin has been disabled.", LogLevel.Debug);
-                return;
-            }
-
-            // Add Adopt & Skin to the update loop
-            this.Helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
 
 
-            // -- Load skin maps
-            AnimalSkinMap = this.Helper.Data.ReadSaveData<Dictionary<long, int>>("animal-skin-map") ?? new Dictionary<long, int>();
-            PetSkinMap = this.Helper.Data.ReadSaveData<Dictionary<long, int>>("pet-skin-map") ?? new Dictionary<long, int>();
-            HorseSkinMap = this.Helper.Data.ReadSaveData<Dictionary<long, int>>("horse-skin-map") ?? new Dictionary<long, int>();
-            // -- Load Short ID maps
-            AnimalLongToShortIDs = this.Helper.Data.ReadSaveData<Dictionary<long, int>>("animal-long-to-short-ids") ?? new Dictionary<long, int>();
-            AnimalShortToLongIDs = this.Helper.Data.ReadSaveData<Dictionary<int, long>>("animal-short-to-long-ids") ?? new Dictionary<int, long>();
-            // -- Load pet variable
-            FirstPetReceived = bool.Parse(this.Helper.Data.ReadSaveData<string>("first-pet-received") ?? "false");
-            // -- Check new Adopt & Skin files for a pre-existing pet
-            if (!FirstPetReceived && GetPets().ToList().Count > 0)
-            {
-                FirstPetReceived = true;
-                Game1.addMailForTomorrow("MarnieStrays");
-            }
-            // Place the pet bed on the map if the first pet has already been received
-            if (FirstPetReceived)
-                Creator.PlaceBetBed();
-
-
-            // Load creature skins, adjust for new-to-AS saves and old-version-AS files
-            LoadCheckCreatures();
-
-            // Make sure Marnie's cows put some clothes on
-            foreach (GameLocation loc in Game1.locations)
-            {
-                if (loc is Forest forest)
-                    foreach (FarmAnimal animal in forest.marniesLivestock)
-                        animal.Sprite = new AnimatedSprite(GetSkinFromID(Sanitize(animal.type.Value),
-                            Randomizer.Next(1, AnimalAssets[Sanitize(animal.type.Value)].Count)).AssetKey, 0, 32, 32);
-            }
-
-            // Set last known animal count
-            AnimalCount = Game1.getFarm().getAllFarmAnimals().Count;
-        }
-
-
-        /// <summary>
-        /// Ensure that files new to Adopt & Skin, or files that have multiple pets or horses from other mods,
-        /// have these creatures properly added to the AS system.
-        /// </summary>
-        private void LoadCheckCreatures()
-        {
-            // Ensure files with multiple pets not from AS or from older versions of AS are added into the system
-            if (PetSkinMap.Count == 0 && GetPets().ToList().Count != 0)
-            {
-                this.Monitor.Log($"File new to Adopt & Skin or older version save detected. Skins for pets will be randomized.", LogLevel.Alert);
-                foreach (Pet pet in GetPets())
-                    if (pet.Manners != Stray.StrayID)
-                        AddCreature(pet);
-            }
-            // Update skins as normal, check for pets not in the system
-            else
-            {
-                foreach (Pet pet in GetPets())
-                    if (!PetSkinMap.ContainsKey(pet.Manners) && pet.Manners != Stray.StrayID)
-                        AddCreature(pet);
-                    else if (pet.Manners != Stray.StrayID)
-                        UpdateSkin(pet);
-            }
-
-
-            // Ensure files with multiple horses not from AS or from older versions of AS are added into the system
-            if (HorseSkinMap.Count == 0 && GetHorses().ToList().Count != 0)
-            {
-                this.Monitor.Log($"File new to Adopt & Skin or older version save detected. Skins for horses will be randomized.", LogLevel.Alert);
-                foreach (Horse horse in GetHorses())
-                    if (horse.Manners != WildHorse.WildID)
-                        AddCreature(horse);
-            }
-            // Update skins as normal, check for horses not in the system
-            else
-            {
-                foreach (Horse horse in GetHorses())
-                    if (!HorseSkinMap.ContainsKey(horse.Manners) && horse.Manners != WildHorse.WildID)
-                        AddCreature(horse);
-                    else if (horse.Manners != WildHorse.WildID)
-                        UpdateSkin(horse);
-            }
-
-
-            // Ensure files new to AS or from older versions of AS have animals added into the system
-            if (AnimalSkinMap.Count == 0 && GetAnimals().ToList().Count != 0)
-            {
-                this.Monitor.Log($"File new to Adopt & Skin or older version save detected. Skins for farm animals will be randomized.", LogLevel.Alert);
-                foreach (FarmAnimal animal in GetAnimals())
-                    AddCreature(animal);
-            }
-            // Update skins as normal, check for animals not in the system
-            else
-            {
-                foreach (FarmAnimal animal in GetAnimals())
-                    if (!AnimalLongToShortIDs.ContainsKey(animal.myID.Value))
-                        AddCreature(animal);
-                    else
-                        UpdateSkin(animal);
-            }
-        }
-
+        /*****************
+        ** Name Tooltip
+        ******************/
 
         /// <summary>Renders the name hover tooltip if a pet or horse is being hovered over</summary>
         private void RenderHoverTooltip(object sender, RenderingHudEventArgs e)
@@ -986,153 +861,5 @@ namespace AdoptSkin
             }
         }
 
-
-        private void SaveData(object s, EventArgs e)
-        {
-            // Only allow the host player to save Adopt & Skin data
-            if (!Context.IsMainPlayer)
-                return;
-
-            // Remove Adopt & Skin from update loop
-            this.Helper.Events.GameLoop.UpdateTicked -= this.OnUpdateTicked;
-
-            // Save skin maps
-            this.Helper.Data.WriteSaveData("animal-skin-map", AnimalSkinMap);
-            this.Helper.Data.WriteSaveData("pet-skin-map", PetSkinMap);
-            this.Helper.Data.WriteSaveData("horse-skin-map", HorseSkinMap);
-
-            // Save Short ID maps
-            this.Helper.Data.WriteSaveData("animal-long-to-short-ids", AnimalLongToShortIDs);
-            this.Helper.Data.WriteSaveData("animal-short-to-long-ids", AnimalShortToLongIDs);
-
-            // Save data version. May be used for reverse-compatibility for files.
-            this.Helper.Data.WriteSaveData("data-version", "2");
-        }
-
-
-        /// <summary>Sets up initial values needed for Adopt & Skin.</summary>
-        private void Setup(object sender, SaveLoadedEventArgs e)
-        {
-            ModApi.RegisterDefaultTypes();
-            IntegrateMods();
-
-            LoadAssets();
-
-            // Remove the Setup from the loop, so that it isn't done twice when the player returns to the title screen and loads again
-            this.Helper.Events.GameLoop.SaveLoaded -= this.Setup;
-        }
-
-
-        /// <summary>Loads handlers for integration of other mods</summary>
-        private void IntegrateMods()
-        {
-            ISemanticVersion bfavVersion;
-            if (this.Helper.ModRegistry.IsLoaded("Paritee.BetterFarmAnimalVariety"))
-            {
-                bfavVersion = this.Helper.ModRegistry.Get("Paritee.BetterFarmAnimalVariety").Manifest.Version;
-
-                if (bfavVersion.IsNewerThan("2.2.6"))
-                    BFAV300Worker = new BFAV300Integrator();
-                else
-                    BFAV226Worker = new BFAV226Integrator();
-            }
-        }
-
-
-        /// <summary>Load skin assets from the /assets/skins directory into Adopt & Skin</summary>
-        private void LoadAssets()
-        {
-            // Gather handled types
-            string validTypes = string.Join(", ", ModApi.GetHandledAllTypes());
-
-            foreach (FileInfo file in new DirectoryInfo(Path.Combine(this.Helper.DirectoryPath, "assets", "skins")).EnumerateFiles())
-            {
-                // Check extension of file is handled by Adopt & Skin
-                string extension = Path.GetExtension(file.Name);
-                if (!this.ValidExtensions.Contains(extension))
-                {
-                    this.Monitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid extension (extension must be one of type {string.Join(", ", this.ValidExtensions)})", LogLevel.Warn);
-                    continue;
-                }
-
-                // Parse file name
-                string[] nameParts = Path.GetFileNameWithoutExtension(file.Name).Split(new[] { '_' }, 2);
-                string type = Sanitize(nameParts[0]);
-                // Ensure creature type is handled by Adopt & Skin
-                if (!PetAssets.ContainsKey(type) && !HorseAssets.ContainsKey(type) && !AnimalAssets.ContainsKey(type))
-                {
-                    this.Monitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid naming convention (can't parse {nameParts[0]} as an animal, pet, or horse. Expected one of type: {validTypes})", LogLevel.Warn);
-                    continue;
-                }
-                // Ensure both a type and skin ID can be found in the file name
-                if (nameParts.Length != 2)
-                {
-                    this.Monitor.Log($"Ignored skin `assets/skins/{file.Name} with invalid naming convention (no skin ID found)", LogLevel.Warn);
-                    continue;
-                }
-                // Ensure the skin ID is a number
-                int skinID = 0;
-                if (nameParts.Length == 2 && !int.TryParse(nameParts[1], out skinID))
-                {
-                    this.Monitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid skin ID (can't parse {nameParts[1]} as a number)", LogLevel.Warn);
-                    continue;
-                }
-                // Ensure the skin ID is not 0 or negative
-                if (skinID <= 0)
-                {
-                    this.Monitor.Log($"Ignored skin `assets/skins/{file.Name}` with skin ID of less than or equal to 0. Skins must have an ID of at least 1.");
-                    continue;
-                }
-
-                // File naming is valid, add asset into system
-                string assetKey = this.Helper.Content.GetActualAssetKey(Path.Combine("assets", "skins", extension.Equals("xnb") ? Path.Combine(Path.GetDirectoryName(file.Name), Path.GetFileNameWithoutExtension(file.Name)) : file.Name));
-                if (AnimalAssets.ContainsKey(type))
-                    AnimalAssets[type].Add(new AnimalSkin(type, skinID, assetKey));
-                else if (HorseAssets.ContainsKey(type))
-                    HorseAssets[type].Add(new AnimalSkin(type, skinID, assetKey));
-                else
-                    PetAssets[type].Add(new AnimalSkin(type, skinID, assetKey));
-            }
-
-
-            // Sort each list
-            AnimalSkin.Comparer comp = new AnimalSkin.Comparer();
-            foreach (string type in AnimalAssets.Keys)
-                AnimalAssets[type].Sort((p1, p2) => comp.Compare(p1, p2));
-            foreach (string type in PetAssets.Keys)
-                PetAssets[type].Sort((p1, p2) => comp.Compare(p1, p2));
-            foreach (string type in HorseAssets.Keys)
-                HorseAssets[type].Sort((p1, p2) => comp.Compare(p1, p2));
-
-
-            // Print loaded assets to console
-            StringBuilder summary = new StringBuilder();
-            summary.AppendLine(
-                "Statistics:\n"
-                + "\n  Registered types: " + validTypes
-                + "\n  Animal Skins:"
-            );
-            foreach (KeyValuePair<string, List<AnimalSkin>> pair in ModEntry.AnimalAssets)
-            {
-                if (pair.Value.Count > 0)
-                    summary.AppendLine($"    {pair.Key}: {pair.Value.Count} skins ({string.Join(", ", pair.Value.Select(p => Path.GetFileName(p.AssetKey)).OrderBy(p => p))})");
-            }
-            summary.AppendLine("  Pet Skins:");
-            foreach (KeyValuePair<string, List<AnimalSkin>> pair in ModEntry.PetAssets)
-            {
-                if (pair.Value.Count > 0)
-                    summary.AppendLine($"    {pair.Key}: {pair.Value.Count} skins ({string.Join(", ", pair.Value.Select(p => Path.GetFileName(p.AssetKey)).OrderBy(p => p))})");
-            }
-            summary.AppendLine("  Horse Skins:");
-            foreach (KeyValuePair<string, List<AnimalSkin>> pair in ModEntry.HorseAssets)
-            {
-                if (pair.Value.Count > 0)
-                    summary.AppendLine($"    {pair.Key}: {pair.Value.Count} skins ({string.Join(", ", pair.Value.Select(p => Path.GetFileName(p.AssetKey)).OrderBy(p => p))})");
-            }
-
-
-            this.Monitor.Log(summary.ToString(), LogLevel.Trace);
-        }
-        
     }
 }

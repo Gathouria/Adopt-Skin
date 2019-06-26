@@ -30,13 +30,16 @@ namespace AdoptSkin.Framework
         /// <summary>Reference to Adopt & Skin's ModEntry. Used to access creature information and print information to the monitor when necessary.</summary>
         internal ModEntry Earth;
 
-        /// <summary>Whether or not a potential pet is available for adoption at Marnie's currently</summary>
-        internal bool CanAdopt;
-
-        /// <summary>The pet available for adoption at Marnies for the current day.</summary>
+        /// <summary>The Stray and WildHorse on the map for the day. Null is there is none.</summary>
         internal Stray StrayInfo = null;
-        /// <summary>The wild horse available for adoption somewhere in the map. This variable is null if there is no current wild horse.</summary>
         internal WildHorse HorseInfo = null;
+
+        internal bool FirstHorseReceived = false;
+        internal bool FirstPetReceived = false;
+
+        internal static readonly int AdoptPrice = ModEntry.Config.StrayAdoptionPrice;
+        internal static readonly int WildHorseChance = ModEntry.Config.WildHorseChancePercentage;
+        internal static readonly int StrayChance = ModEntry.Config.StrayChancePercentage;
 
 
 
@@ -50,52 +53,52 @@ namespace AdoptSkin.Framework
             Earth = modentry;
         }
 
-
-        /// <summary>Resets variables that change each day</summary>
+        /// <summary>Calculates variables that change each day</summary>
         internal void ProcessNewDay(object sender, DayStartedEventArgs e)
         {
-            NewStray();
-            if (ModEntry.Config.WildHorses)
-                NewWildHorse();
+            // Positive luck will give a negative modifier, making it more likely that the random number is in the success range
+            int luckBonus = -(int)(Game1.dailyLuck * 100);
+
+            // Check chances for Stray and WildHorse to spawn, add creation to update loop if spawn should occur
+            if (ModEntry.Config.StraySpawn && FirstPetReceived && Randomizer.Next(0, 100) + luckBonus < StrayChance)
+                ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceStray;
+            if (ModEntry.Config.WildHorseSpawn && FirstHorseReceived && Randomizer.Next(0, 100) + luckBonus < WildHorseChance)
+                ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceWildHorse;
+
+            // ** TODO: Teleport pets around the farmhouse? (dependent on weather too)
         }
 
 
-        /// <summary>Creates a new Stray at Marnie's. Used for new save files.</summary>
-        internal void NewStray()
+        /// <summary>Removes Stray and WildHorse instances from the map</summary>
+        internal void ProcessEndDay(object sender, DayEndingEventArgs e)
         {
-            // If a Stray was around yesterday, remove it from the map
-            if (StrayInfo != null)
+            // Remove any Strays and WildHorses from the map
+            if (StrayInfo != null && StrayInfo.PetInstance != null)
                 StrayInfo.RemoveFromWorld();
+            if (HorseInfo != null && HorseInfo.HorseInstance != null)
+                HorseInfo.RemoveFromWorld();
+        }
+
+
+        /// <summary>Creates a Stray instance</summary>
+        internal void PlaceStray(object sender, UpdateTickedEventArgs e)
+        {
+            if (!Game1.hasLoadedGame || !ModEntry.AssetsLoaded)
+                return;
 
             StrayInfo = new Stray();
+            ModEntry.SHelper.Events.GameLoop.UpdateTicked -= this.PlaceStray;
         }
 
 
-        /// <summary>Checks the chance for a WildHorse to spawn if a stable exists on the farm, and spawns one if it should. Used for new save files.</summary>
-        internal void NewWildHorse(bool overrideChance = false)
+        /// <summary>Creates a WildHorse instance</summary>
+        internal void PlaceWildHorse(object sender, UpdateTickedEventArgs e)
         {
-            // If the previous day had a WildHorse, remove it from the map
-            if (HorseInfo != null)
-                HorseInfo.RemoveFromWorld();
+            if (!Game1.hasLoadedGame || !ModEntry.AssetsLoaded)
+                return;
 
-            // Check chance for a WildHorse spawn, and spawn a new WildHorse if there should be one
-            if (Randomizer.Next(0, 4) == 0 || overrideChance)
-            {
-                // Only spawn a wild horse if the player has a stable
-                foreach (Building b in Game1.getFarm().buildings)
-                    if (b is Stable || overrideChance)
-                    {
-                        HorseInfo = new WildHorse();
-                        break;
-                    }
-            }
-        }
-
-
-        /// <summary>Returns true if a pet in available for adoption at Marnie's.</summary>
-        public bool CanAdoptNow()
-        {
-            return CanAdopt ? true : false;
+            HorseInfo = new WildHorse();
+            ModEntry.SHelper.Events.GameLoop.UpdateTicked -= this.PlaceWildHorse;
         }
 
 
@@ -114,20 +117,13 @@ namespace AdoptSkin.Framework
             TileSheet tileSheet = new xTile.Tiles.TileSheet("PetBed", marnies.map, Earth.Helper.Content.GetActualAssetKey("assets/petbed.png"), new xTile.Dimensions.Size(1, 1), new xTile.Dimensions.Size(16, 15));
             marnies.map.AddTileSheet(tileSheet);
             Layer buildingLayer = marnies.map.GetLayer("Buildings");
-            buildingLayer.Tiles[17, 15] = new StaticTile(buildingLayer, tileSheet, BlendMode.Additive, 0);
-        }
-
-
-        
-        internal void AdoptPet()
-        {
-            Game1.activeClickableMenu = new NamingMenu(PetNamer, "Name:");
+            buildingLayer.Tiles[17, 15] = new StaticTile(buildingLayer, tileSheet, BlendMode.Alpha, 0);
+            marnies.updateMap();
         }
         
-
 
         /// <summary>Check to see if the player is attempting to interact with the stray</summary>
-        internal void StrayCheck(object sender, ButtonPressedEventArgs e)
+        internal void StrayInteractionCheck(object sender, ButtonPressedEventArgs e)
         {
             if (StrayInfo != null &&
                 e.Button.Equals(SButton.MouseRight) &&
@@ -138,16 +134,21 @@ namespace AdoptSkin.Framework
                 {
 
                     Game1.activeClickableMenu = new ConfirmationDialog("This is one of the strays that Marnie has taken in. \n\n" +
-                        $"The animal is wary, but curious. Will you adopt this {ModEntry.Sanitize(StrayInfo.PetInstance.GetType().Name)}?", (who) =>
+                        $"The animal is wary, but curious. Will you adopt this {ModEntry.Sanitize(StrayInfo.PetInstance.GetType().Name)} for {AdoptPrice}G?", (who) =>
                     {
                         if (Game1.activeClickableMenu is StardewValley.Menus.ConfirmationDialog cd)
                             cd.cancel();
 
-                        Game1.activeClickableMenu = new NamingMenu(PetNamer, $"What will you name it?");
-                    }, (who) =>
-                    {
-                        // Exit the naming menu
-                        Game1.drawObjectDialogue($"You leave the little one to rest for now. Marnie will take good care of it.");
+                        if (Game1.player.Money >= AdoptPrice)
+                        {
+                            Game1.player.Money -= AdoptPrice;
+                            Game1.activeClickableMenu = new NamingMenu(PetNamer, $"What will you name it?");
+                        }
+                        else
+                        {
+                            // Exit the naming menu
+                            Game1.drawObjectDialogue($"You don't have {AdoptPrice}G..");
+                        }
                     });
                 }
             }
@@ -164,6 +165,10 @@ namespace AdoptSkin.Framework
 
             // Warp the new Pet to the farmhouse
             StrayInfo.PetInstance.warpToFarmHouse(Game1.player);
+
+            // Set walk-through pet configuration
+            if (!ModEntry.Config.WalkThroughPets)
+                StrayInfo.PetInstance.farmerPassesThrough = false;
 
             // Pet is no longer a Stray to keep track of
             StrayInfo = null;
@@ -182,7 +187,7 @@ namespace AdoptSkin.Framework
          *********************************/
 
         /// <summary>Check to see if the player is attempting to interact with the wild horse</summary>
-        internal void HorseCheck(object sender, ButtonPressedEventArgs e)
+        internal void WildHorseInteractionCheck(object sender, ButtonPressedEventArgs e)
         {
             if (HorseInfo != null && 
                 e.Button.Equals(SButton.MouseRight) &&

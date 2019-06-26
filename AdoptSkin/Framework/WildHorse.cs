@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
 
 using StardewModdingAPI;
+using StardewModdingAPI.Events;
 
 using StardewValley;
 using StardewValley.Characters;
@@ -33,26 +34,30 @@ namespace AdoptSkin.Framework
 
 
 
-        /// <summary>Creates a new WildHorse for placement on the map.</summary>
+        /// <summary>Creates a new WildHorse instance</summary>
         internal WildHorse()
         {
-            SkinID  = Randomizer.Next(1, ModEntry.HorseAssets["horse"].Count + 1);
-
+            // Create WildHorse traits
+            SkinID = Randomizer.Next(1, ModEntry.HorseAssets["horse"].Count + 1);
             string mapName = SpawningMaps[Randomizer.Next(0, SpawningMaps.Count)];
             Map = Game1.getLocationFromName(mapName);
             Tile = GetRandomSpawnLocation(Map);
 
-            HorseInstance = new Horse(new Guid(), (int)Tile.X, (int)Tile.Y);
-            HorseInstance.Sprite = new AnimatedSprite(ModEntry.GetSkinFromID("horse", SkinID).AssetKey, 7, 32, 32);
-            HorseInstance.Manners = WildID;
+            // Create Horse instance
+            HorseInstance = new Horse(new Guid(), (int)Tile.X, (int)Tile.Y)
+            {
+                Sprite = new AnimatedSprite(ModEntry.GetSkinFromID("horse", SkinID).AssetKey, 7, 32, 32),
 
-            HorseInstance.Name = "Wild horse";
-            HorseInstance.displayName = "Wild horse";
+                // Temporary WildHorse traits
+                Manners = WildID,
+                Name = "Wild horse",
+                displayName = "Wild horse"
+            };
 
-            Map.addCharacter(HorseInstance);
+            // Put that thing where it belongs
             Game1.warpCharacter(HorseInstance, Map, Tile);
 
-            if (ModEntry.Config.DetailedConsoleOutput)
+            if (ModEntry.Config.NotifyHorseSpawn)
             {
                 string message = $"A wild horse has been spotted at: {Map.Name} -- {Tile.X}, {Tile.Y}";
                 ModEntry.SMonitor.Log(message, LogLevel.Debug);
@@ -64,11 +69,14 @@ namespace AdoptSkin.Framework
         /// <summary>Remove this WildHorse's Horse instance from its map</summary>
         internal void RemoveFromWorld()
         {
+            if (HorseInstance == null)
+                return;
+
             Game1.removeThisCharacterFromAllLocations(this.HorseInstance);
         }
 
 
-        /// <summary>Returns a tile from the given map, that is reasonably accessible, to spawn the WildHorse at</summary>
+        /// <summary>Returns a tile from the given map, with a reasonable attempt to be accessible to the player, to spawn the WildHorse at</summary>
         internal static Vector2 GetRandomSpawnLocation(GameLocation map)
         {
             // Make sure the tile is reasonably accessible
@@ -77,7 +85,6 @@ namespace AdoptSkin.Framework
                 map.isBehindTree(randomTile) ||
                 map.isBehindBush(randomTile) ||
                 map.isCollidingWithWarpOrDoor(new Rectangle((int)randomTile.X, (int)randomTile.Y, 1, 1)) != null ||
-                !map.isTilePassable(new xTile.Dimensions.Location((int)randomTile.X, (int)randomTile.Y), Game1.viewport) ||
                 !map.isTileLocationTotallyClearAndPlaceableIgnoreFloors(randomTile) ||
                 !map.isTileLocationTotallyClearAndPlaceableIgnoreFloors(new Vector2(randomTile.X + 1, randomTile.Y)))
             {

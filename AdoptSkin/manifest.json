@@ -1,7 +1,7 @@
 ﻿{
   "Name": "Adopt & Skin",
   "Author": "Gathouria",
-  "Version": "2.3.0-beta",
+  "Version": "2.3.3-beta",
   "Description": "Multipet, multihorse, and randomization of custom sprites on your pets, horses, and farm animals!",
   "UniqueID": "Gathouria.AdoptSkin",
   "EntryDll": "AdoptSkin.dll",

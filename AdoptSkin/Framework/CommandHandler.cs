@@ -18,6 +18,9 @@ namespace AdoptSkin.Framework
     /// <summary>The SMAPI console command handler for Adopt & Skin</summary>
     class CommandHandler
     {
+        /// <summary>Allowable custom creature group denotations for use in commands</summary>
+        internal static readonly List<string> CreatureGroups = new List<string>() { "all", "animal", "coop", "barn", "chicken", "cow", "pet", "horse" };
+
         internal ModEntry Earth;
 
         internal CommandHandler(ModEntry modEntry)
@@ -36,6 +39,9 @@ namespace AdoptSkin.Framework
             switch (command)
             {
                 case "debug_reset":
+                    if (!EnforceArgCount(args, 0))
+                        break;
+
                     ModEntry.AnimalSkinMap = new Dictionary<long, int>();
                     ModEntry.PetSkinMap = new Dictionary<long, int>();
                     ModEntry.HorseSkinMap = new Dictionary<long, int>();
@@ -64,25 +70,39 @@ namespace AdoptSkin.Framework
 
 
                 case "debug_idmaps":
+                    if (!EnforceArgCount(args, 0))
+                        break;
+
                     ModEntry.SMonitor.Log($"Animals Long to Short:\n{string.Join("\n", ModEntry.AnimalLongToShortIDs)}", LogLevel.Info);
                     ModEntry.SMonitor.Log($"Animals Short to Long equal length: {ModEntry.AnimalLongToShortIDs.Count == ModEntry.AnimalShortToLongIDs.Count}", LogLevel.Alert);
                     break;
 
 
                 case "debug_skinmaps":
+                    if (!EnforceArgCount(args, 0))
+                        break;
+
                     ModEntry.SMonitor.Log($"Animals:\n{string.Join("\n", ModEntry.AnimalSkinMap)}", LogLevel.Info);
                     ModEntry.SMonitor.Log($"Pets:\n{string.Join("\n", ModEntry.PetSkinMap)}", LogLevel.Alert);
                     ModEntry.SMonitor.Log($"Horses:\n{string.Join("\n", ModEntry.HorseSkinMap)}", LogLevel.Info);
                     break;
 
 
-                case "debug_manners":
-                    ModEntry.SMonitor.Log("Horse manners:", LogLevel.Alert);
-                    foreach (Horse horse in ModEntry.GetHorses())
-                        ModEntry.SMonitor.Log($"#{horse.Name}: {horse.Manners}", LogLevel.Info);
-                    ModEntry.SMonitor.Log("Pet manners:", LogLevel.Alert);
-                    foreach (Pet pet in ModEntry.GetPets())
-                        ModEntry.SMonitor.Log($"#{pet.Name}: {pet.Manners}", LogLevel.Info);
+                case "debug_pets":
+                    if (!EnforceArgCount(args, 0))
+                        break;
+
+                    foreach (NPC npc in Utility.getAllCharacters())
+                        if (npc is Pet pet)
+                        {
+                            int petSkin = 0;
+                            if (pet.Manners == Stray.StrayID)
+                                petSkin = ModEntry.Creator.StrayInfo.SkinID;
+                            else if (ModEntry.HorseSkinMap.ContainsKey(pet.Manners))
+                                petSkin = ModEntry.HorseSkinMap[pet.Manners];
+
+                            ModEntry.SMonitor.Log($"[{pet.Name}] | Manners: {pet.Manners} | Skin: {petSkin} | Stray: {pet.Manners == Stray.StrayID}", LogLevel.Info);
+                        }
                     break;
 
 
@@ -93,29 +113,94 @@ namespace AdoptSkin.Framework
                     foreach (NPC npc in Utility.getAllCharacters())
                         if (npc is Horse horse)
                         {
-                            ModEntry.SMonitor.Log($"Horse. Manners: {horse.Manners}", LogLevel.Info);
+                            int horseSkin = 0;
+                            if (horse.Manners == WildHorse.WildID)
+                                horseSkin = ModEntry.Creator.HorseInfo.SkinID;
+                            else if (ModEntry.HorseSkinMap.ContainsKey(horse.Manners))
+                                horseSkin = ModEntry.HorseSkinMap[horse.Manners];
+
+                            ModEntry.SMonitor.Log($"[{horse.Name}] | Manners: {horse.Manners} | Skin: {horseSkin} | Wild: {horse.Manners == WildHorse.WildID}", LogLevel.Info);
                         }
                     break;
 
 
-                case "adopt_pet":
-                    Earth.Creator.AdoptPet();
+                case "summon_stray":
+                    if (!EnforceArgCount(args, 0))
+                        break;
+
+                    // Get rid of any previous stray still on the map
+                    if (ModEntry.Creator.StrayInfo != null)
+                        ModEntry.Creator.StrayInfo.RemoveFromWorld();
+                    // Create a gosh darn new stray
+                    ModEntry.Creator.StrayInfo = new Stray();
                     break;
 
 
                 case "summon_horse":
-                    Earth.Creator.NewWildHorse(true);
+                    if (!EnforceArgCount(args, 0))
+                        break;
+
+                    // Get rid of any previous horse still on the map
+                    if (ModEntry.Creator.HorseInfo != null)
+                        ModEntry.Creator.HorseInfo.RemoveFromWorld();
+                    // Create a gosh darn new horse
+                    ModEntry.Creator.HorseInfo = new WildHorse();
+                    break;
+
+
+                case "debug_clearunowned":
+                    if (!EnforceArgCount(args, 0))
+                        break;
+
+                    foreach (NPC npc in Utility.getAllCharacters())
+                    {
+                        if (npc is Horse horse && horse.Manners == WildHorse.WildID)
+                        {
+                            Game1.removeThisCharacterFromAllLocations(horse);
+                        }
+                        if (npc is Pet pet && pet.Manners == Stray.StrayID)
+                        {
+                            Game1.removeThisCharacterFromAllLocations(pet);
+                        }
+                    }
                     break;
 
 
                 // Expected arguments: <horse ID>
-                case "find_horse":
+                case "debug_find":
                     // Enforce argument constraints
-                    if (!EnforceArgCount(args, 1) ||
-                        !EnforceArgTypeInt(args[0], 1))
+                    if (!EnforceArgCount(args, 2) ||
+                        !EnforceArgTypeCategory(args[0], 1) ||
+                        !EnforceArgTypeInt(args[1], 2))
                         break;
 
-                    int id = int.Parse(args[0]);
+                    string cat = ModEntry.Sanitize(args[0]);
+                    int id = int.Parse(args[1]);
+
+                    switch (cat)
+                    {
+                        case "horse":
+                            foreach (Horse horse in ModEntry.GetHorses())
+                                if (horse.Manners == id)
+                                    ModEntry.SMonitor.Log($"{horse.Name} located at: {horse.currentLocation} | {horse.getTileX()}, {horse.getTileY()}", LogLevel.Alert);
+                            break;
+
+                        case "pet":
+                            foreach (Pet pet in ModEntry.GetPets())
+                                if (pet.Manners == id)
+                                    ModEntry.SMonitor.Log($"{pet.Name} located at: {pet.currentLocation} | {pet.getTileX()}, {pet.getTileY()}", LogLevel.Alert);
+                            break;
+
+                        case "animal":
+                            foreach (FarmAnimal animal in ModEntry.GetAnimals())
+                                if (ModEntry.AnimalLongToShortIDs[animal.myID.Value] == id)
+                                    ModEntry.SMonitor.Log($"{animal.Name} located at: {animal.currentLocation} | {animal.getTileX()}, {animal.getTileY()}", LogLevel.Alert);
+                            break;
+
+                        default:
+                            break;
+                    }
+                    
                     foreach (Horse horse in ModEntry.GetHorses())
                     {
                         if (horse.Manners == id)
@@ -153,7 +238,7 @@ namespace AdoptSkin.Framework
                             break;
 
                         // Call the first horse found
-                        Earth.CallHorse();
+                        ModEntry.CallHorse();
                     }
                     break;
 
@@ -450,9 +535,9 @@ namespace AdoptSkin.Framework
             string type = ModEntry.Sanitize(arg);
             List<string> handledTypes = ModApi.GetHandledAllTypes();
 
-            if (!ModEntry.CreatureGroups.Contains(type) && !handledTypes.Contains(type))
+            if (!CreatureGroups.Contains(type) && !handledTypes.Contains(type))
             {
-                ModEntry.SMonitor.Log($"Argument given isn't one of {string.Join(", ", ModEntry.CreatureGroups)}, or a handled creature type. Handled types:\n{string.Join(", ", handledTypes)}", LogLevel.Error);
+                ModEntry.SMonitor.Log($"Argument given isn't one of {string.Join(", ", CreatureGroups)}, or a handled creature type. Handled types:\n{string.Join(", ", handledTypes)}", LogLevel.Error);
                 return false;
             }
 
