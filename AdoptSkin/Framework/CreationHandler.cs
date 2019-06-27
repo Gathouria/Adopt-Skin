@@ -15,6 +15,7 @@ using StardewValley;
 using StardewValley.Menus;
 using StardewValley.Characters;
 using StardewValley.Buildings;
+using StardewValley.Locations;
 
 namespace AdoptSkin.Framework
 {
@@ -41,6 +42,8 @@ namespace AdoptSkin.Framework
         internal static readonly int WildHorseChance = ModEntry.Config.WildHorseChancePercentage;
         internal static readonly int StrayChance = ModEntry.Config.StrayChancePercentage;
 
+        internal static int CurrentWeather;
+
 
 
 
@@ -59,6 +62,17 @@ namespace AdoptSkin.Framework
             // Positive luck will give a negative modifier, making it more likely that the random number is in the success range
             int luckBonus = -(int)(Game1.dailyLuck * 100);
 
+            // Luck affect has been turned off in the Config
+            if (!ModEntry.Config.ChanceAffectedByLuck)
+                luckBonus = 0;
+
+            // Sunny = 0
+            // Rain = 1
+            // Debris = 2
+            // Lightning = 3
+            // Festival = 4
+            // Snow = 5
+            // Wedding = 6
             // Check chances for Stray and WildHorse to spawn, add creation to update loop if spawn should occur
             if (ModEntry.Config.StraySpawn && FirstPetReceived && Randomizer.Next(0, 100) + luckBonus < StrayChance)
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceStray;
@@ -66,6 +80,7 @@ namespace AdoptSkin.Framework
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceWildHorse;
 
             // ** TODO: Teleport pets around the farmhouse? (dependent on weather too)
+            ModEntry.SHelper.Events.Player.Warped += this.SpreadPets;
         }
 
 
@@ -99,6 +114,69 @@ namespace AdoptSkin.Framework
 
             HorseInfo = new WildHorse();
             ModEntry.SHelper.Events.GameLoop.UpdateTicked -= this.PlaceWildHorse;
+        }
+
+
+        internal void SpreadPets(object sender, WarpedEventArgs e)
+        {
+            // Only warp pets on return to farm, and when the weather is proper for pets being outside
+            if (!(e.NewLocation is Farm) || Game1.isRaining || Game1.isLightning || Game1.isSnowing)
+                return;
+            // Make sure pets are not otherwise in the FarmHouse
+            List<Pet> pets = ModEntry.GetPets().ToList();
+            if (!ModEntry.PetSkinMap.ContainsKey(pets[0].Manners) || !(pets[0].currentLocation is Farm))
+                return;
+
+
+            Farm farm = Game1.getFarm();
+            int initX = (int)pets[0].getTileLocation().X;
+            int initY = (int)pets[0].getTileLocation().Y;
+            List<Vector2> warpableTiles = new List<Vector2>();
+            int cer = ModEntry.Config.CuddleExplosionRadius;
+
+            // Collect a set of potential tiles to warp a pet to
+            for (int i = -cer; i < cer; i++)
+            {
+                for (int j = -cer; j < cer; j++)
+                {
+                    Vector2 tile = new Vector2(initX + i, initY + j);
+                    if (IsTileAccessible(farm, tile))
+                        warpableTiles.Add(tile);
+                }
+            }
+
+            // Can't warp in the range specified in the Config
+            if (warpableTiles.Count == 0)
+            {
+                ModEntry.SMonitor.Log($"Pets cannot be spread within the given radius: {cer}", LogLevel.Error);
+                return;
+            }
+
+            // Warp pets
+            foreach (Pet pet in ModEntry.GetPets())
+                if (ModEntry.PetSkinMap.ContainsKey(pet.Manners))
+                {
+                    Vector2 ranTile = warpableTiles[Randomizer.Next(0, warpableTiles.Count)];
+                    Game1.warpCharacter(pet, farm, ranTile);
+                }
+
+        }
+
+
+        internal static bool IsTileAccessible(GameLocation map, Vector2 tile)
+        {
+            if (!map.isTileOnMap(tile) ||
+                map.isOpenWater((int)tile.X, (int)tile.Y) ||
+                map.isBehindTree(tile) ||
+                map.isBehindBush(tile) ||
+                map.isCollidingWithWarpOrDoor(new Microsoft.Xna.Framework.Rectangle((int)tile.X, (int)tile.Y, 1, 1)) != null ||
+                !map.isTileLocationTotallyClearAndPlaceableIgnoreFloors(tile) ||
+                !map.isTileLocationTotallyClearAndPlaceableIgnoreFloors(new Vector2(tile.X + 1, tile.Y)))
+            {
+                return false;
+            }
+
+            return true;
         }
 
 

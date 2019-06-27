@@ -200,14 +200,6 @@ namespace AdoptSkin.Framework
                         default:
                             break;
                     }
-                    
-                    foreach (Horse horse in ModEntry.GetHorses())
-                    {
-                        if (horse.Manners == id)
-                        {
-                            ModEntry.SMonitor.Log($"{horse.Name} located at: {horse.currentLocation} | {horse.getTileX()}, {horse.getTileY()}", LogLevel.Alert);
-                        }
-                    }
 
                     break;
 

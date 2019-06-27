@@ -132,7 +132,7 @@ namespace AdoptSkin.Framework
                             Randomizer.Next(1, ModEntry.AnimalAssets[ModEntry.Sanitize(animal.type.Value)].Count)).AssetKey, 0, 32, 32);
             }
 
-            // Set configuration for pass-through pets
+            // Set configuration for walk-through pets
             foreach (Pet pet in ModEntry.GetPets())
                 if (pet.Manners != Stray.StrayID)
                 {

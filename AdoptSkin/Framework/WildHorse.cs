@@ -81,12 +81,7 @@ namespace AdoptSkin.Framework
         {
             // Make sure the tile is reasonably accessible
             Vector2 randomTile = map.getRandomTile();
-            while (map.isOpenWater(int.Parse(randomTile.X.ToString()), int.Parse(randomTile.Y.ToString())) ||
-                map.isBehindTree(randomTile) ||
-                map.isBehindBush(randomTile) ||
-                map.isCollidingWithWarpOrDoor(new Rectangle((int)randomTile.X, (int)randomTile.Y, 1, 1)) != null ||
-                !map.isTileLocationTotallyClearAndPlaceableIgnoreFloors(randomTile) ||
-                !map.isTileLocationTotallyClearAndPlaceableIgnoreFloors(new Vector2(randomTile.X + 1, randomTile.Y)))
+            while (!CreationHandler.IsTileAccessible(map, randomTile))
             {
                 randomTile = map.getRandomTile();
             }
