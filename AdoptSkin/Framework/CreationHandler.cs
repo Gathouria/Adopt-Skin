@@ -42,8 +42,6 @@ namespace AdoptSkin.Framework
         internal static readonly int WildHorseChance = ModEntry.Config.WildHorseChancePercentage;
         internal static readonly int StrayChance = ModEntry.Config.StrayChancePercentage;
 
-        internal static int CurrentWeather;
-
 
 
 
@@ -66,20 +64,13 @@ namespace AdoptSkin.Framework
             if (!ModEntry.Config.ChanceAffectedByLuck)
                 luckBonus = 0;
 
-            // Sunny = 0
-            // Rain = 1
-            // Debris = 2
-            // Lightning = 3
-            // Festival = 4
-            // Snow = 5
-            // Wedding = 6
             // Check chances for Stray and WildHorse to spawn, add creation to update loop if spawn should occur
             if (ModEntry.Config.StraySpawn && FirstPetReceived && Randomizer.Next(0, 100) + luckBonus < StrayChance)
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceStray;
             if (ModEntry.Config.WildHorseSpawn && FirstHorseReceived && Randomizer.Next(0, 100) + luckBonus < WildHorseChance)
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceWildHorse;
 
-            // ** TODO: Teleport pets around the farmhouse? (dependent on weather too)
+            // Spread out pets from around water dish
             ModEntry.SHelper.Events.Player.Warped += this.SpreadPets;
         }
 
