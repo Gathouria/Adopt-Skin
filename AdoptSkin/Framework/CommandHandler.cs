@@ -236,31 +236,7 @@ namespace AdoptSkin.Framework
 
 
                 case "corral_horses":
-                    // Find the farm's stable
-                    Stable horsehut = null;
-                    foreach (Building building in Game1.getFarm().buildings)
-                        if (building is Stable)
-                            horsehut = building as Stable;
-
-                    // No stable was found on the farm
-                    if (horsehut == null)
-                    {
-                        ModEntry.SMonitor.Log("NOTICE: You don't have a stable to warp to!", LogLevel.Error);
-                        break;
-                    }
-
-                    // WARP THEM. WARP THEM ALL.
-                    int stableX = int.Parse(horsehut.tileX.ToString()) + 1;
-                    int stableY = int.Parse(horsehut.tileY.ToString()) + 1;
-                    Vector2 stableWarp = new Vector2(stableX, stableY);
-                    foreach (Horse horse in ModEntry.GetHorses())
-                    {
-                        if (ModEntry.HorseSkinMap.ContainsKey(horse.Manners))
-                            Game1.warpCharacter(horse, "farm", stableWarp);
-                    }
-
-                    ModEntry.SMonitor.Log("All horses have been warped to the stable.", LogLevel.Alert);
-
+                    ModEntry.CorralHorses();
                     break;
 
 

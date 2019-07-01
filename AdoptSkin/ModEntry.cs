@@ -84,7 +84,7 @@ namespace AdoptSkin
 
         internal static bool AssetsLoaded = false;
 
-
+        // ** TODO: Make keybind for corral_horses
 
 
 
@@ -221,7 +221,8 @@ namespace AdoptSkin
 
         /// <summary>Calls a horse that the player owns to the player's location</summary>
         internal static void CallHorse()
-        {// Make sure that the player is calling the horse while outside
+        {
+            // Make sure that the player is calling the horse while outside
             if (!Game1.player.currentLocation.IsOutdoors)
             {
                 ModEntry.SMonitor.Log("You cannot call for a horse while indoors.", LogLevel.Alert);
@@ -242,6 +243,36 @@ namespace AdoptSkin
             // Player doesn't own a horse yet
             ModEntry.SMonitor.Log("You do not own any horse that you can call.", LogLevel.Alert);
             Game1.chatBox.addInfoMessage("Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"");
+        }
+
+
+        /// <summary>Calls all horses owned by the player to return to the player's stable</summary>
+        internal static void CorralHorses()
+        {
+            // Find the farm's stable
+            Stable horsehut = null;
+            foreach (Building building in Game1.getFarm().buildings)
+                if (building is Stable)
+                    horsehut = building as Stable;
+
+            // No stable was found on the farm
+            if (horsehut == null)
+            {
+                ModEntry.SMonitor.Log("NOTICE: You don't have a stable to warp to!", LogLevel.Error);
+                return;
+            }
+
+            // WARP THEM. WARP THEM ALL.
+            int stableX = int.Parse(horsehut.tileX.ToString()) + 1;
+            int stableY = int.Parse(horsehut.tileY.ToString()) + 1;
+            Vector2 stableWarp = new Vector2(stableX, stableY);
+            foreach (Horse horse in ModEntry.GetHorses())
+            {
+                if (ModEntry.HorseSkinMap.ContainsKey(horse.Manners))
+                    Game1.warpCharacter(horse, "farm", stableWarp);
+            }
+
+            ModEntry.SMonitor.Log("All horses have been warped to the stable.", LogLevel.Alert);
         }
 
 
@@ -651,12 +682,20 @@ namespace AdoptSkin
         }
 
 
-        /// <summary>Check for the Horse Whistle hotkey to be pressed, and execute CallHorse() if necessary</summary>
-        internal static void HorseWhistleCheck(object sender, ButtonReleasedEventArgs e)
+        /// <summary>Check for the Horse Whistle or Corral hotkey to be pressed, and execute the function if necessary</summary>
+        internal static void HotKeyCheck(object sender, ButtonReleasedEventArgs e)
         {
-            if (Context.IsPlayerFree && e.Button.ToString().ToLower() == Config.HorseWhistleKey.ToLower())
+            // Only check for hotkeys if the player is not in a menu
+            if (!Context.IsPlayerFree)
+                return;
+
+            if (e.Button.ToString().ToLower() == Config.HorseWhistleKey.ToLower())
             {
                 CallHorse();
+            }
+            if (e.Button.ToString().ToLower() == Config.CorralKey.ToLower())
+            {
+                CorralHorses();
             }
         }
 

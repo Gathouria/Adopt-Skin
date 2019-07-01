@@ -79,7 +79,7 @@ namespace AdoptSkin.Framework
             SHelper.Events.GameLoop.UpdateTicked += Entry.OnUpdateTicked;
             SHelper.Events.Input.ButtonPressed += ModEntry.Creator.WildHorseInteractionCheck;
             SHelper.Events.Input.ButtonPressed += ModEntry.Creator.StrayInteractionCheck;
-            SHelper.Events.Input.ButtonReleased += ModEntry.HorseWhistleCheck;
+            SHelper.Events.Input.ButtonReleased += ModEntry.HotKeyCheck;
 
             SHelper.Events.World.NpcListChanged += ModEntry.SaveTheHorse;
             SHelper.Events.World.NpcListChanged += Entry.CheckForFirstPet;
@@ -93,7 +93,7 @@ namespace AdoptSkin.Framework
             SHelper.Events.GameLoop.UpdateTicked -= Entry.OnUpdateTicked;
             SHelper.Events.Input.ButtonPressed -= ModEntry.Creator.WildHorseInteractionCheck;
             SHelper.Events.Input.ButtonPressed -= ModEntry.Creator.StrayInteractionCheck;
-            SHelper.Events.Input.ButtonReleased -= ModEntry.HorseWhistleCheck;
+            SHelper.Events.Input.ButtonReleased -= ModEntry.HotKeyCheck;
 
             SHelper.Events.World.NpcListChanged -= ModEntry.SaveTheHorse;
         }
