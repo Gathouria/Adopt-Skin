@@ -130,7 +130,14 @@ namespace AdoptSkin.Framework
             {
                 for (int j = -cer; j < cer; j++)
                 {
-                    Vector2 tile = new Vector2(initX + i, initY + j);
+                    int warpX = initX + i;
+                    int warpY = initY + j;
+                    if (warpX < 0)
+                        warpX = 0;
+                    if (warpY < 0)
+                        warpY = 0;
+
+                    Vector2 tile = new Vector2(warpX, warpY);
                     if (IsTileAccessible(farm, tile))
                         warpableTiles.Add(tile);
                 }

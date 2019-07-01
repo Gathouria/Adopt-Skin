@@ -19,7 +19,7 @@ namespace AdoptSkin
         public bool WalkThroughPets { get; set; } = false;
         /// <summary>Whether or not pets will be teleported around the farmhouse at the beginning of the day (true) or will surround the water dish as normal (false)</summary>
         public bool DisperseCuddlePuddle { get; set; } = true;
-        /// <summary>The radius of the space through which pets can be dispersed from their original spawn location at the water dish. Default 10.</summary>
+        /// <summary>The radius of the space through which pets can be dispersed from their original spawn location at the water dish. Default 5.</summary>
         public int CuddleExplosionRadius { get; set; } = 5;
 
 
@@ -43,14 +43,14 @@ namespace AdoptSkin
 
 
         /// <summary>Whether or not to tell the player when and where a WildHorse has spawned on the map. Will be FALSE by default</summary>
-        public bool NotifyHorseSpawn { get; set; } = true;
+        public bool NotifyHorseSpawn { get; set; } = false;
         /// <summary>Whether or not to tell the player when a Stray has spawned at Marnie's. Will be FALSE by default</summary>
-        public bool NotifyStraySpawn { get; set; } = true;
+        public bool NotifyStraySpawn { get; set; } = false;
 
 
 
 
         /// <summary>Whether or not to allow debugging commands for Adopt & Skin. Will be FALSE by default</summary>
-        public bool DebuggingMode { get; set; } = true;
+        public bool DebuggingMode { get; set; } = false;
     }
 }
