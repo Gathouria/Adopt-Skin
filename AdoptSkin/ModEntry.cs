@@ -84,8 +84,6 @@ namespace AdoptSkin
 
         internal static bool AssetsLoaded = false;
 
-        // ** TODO: Make keybind for corral_horses
-
 
 
 
