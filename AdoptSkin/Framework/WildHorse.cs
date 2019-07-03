@@ -65,6 +65,14 @@ namespace AdoptSkin.Framework
             }
         }
 
+        
+        internal static bool IsWildHorse(Horse horse)
+        {
+            if (horse.Manners == WildID)
+                return true;
+            return false;
+        }
+
 
         /// <summary>Remove this WildHorse's Horse instance from its map</summary>
         internal void RemoveFromWorld()

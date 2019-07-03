@@ -29,7 +29,7 @@ namespace AdoptSkin
 
         private readonly Random Randomizer = new Random();
 
-        internal enum CreatureCategory { Horse, Pet, Animal };
+        internal enum CreatureCategory { Horse, Pet, Animal, Null };
         
         internal static ModConfig Config;
 
@@ -46,11 +46,9 @@ namespace AdoptSkin
         internal static IModHelper SHelper;
         internal static IMonitor SMonitor;
 
-        // SMAPI console command handler
+        // Internal helpers
         internal static CommandHandler Commander;
-        // Pet and Horse creation handler
         internal static CreationHandler Creator;
-        // Save/Load logic handler
         internal static SaveLoadHandler SaverLoader;
 
         // Mod integration
@@ -62,12 +60,18 @@ namespace AdoptSkin
         internal static Dictionary<string, List<AnimalSkin>> PetAssets = new Dictionary<string, List<AnimalSkin>>();
         internal static Dictionary<string, List<AnimalSkin>> HorseAssets = new Dictionary<string, List<AnimalSkin>>();
 
-        // Skin mappings
-        internal static Dictionary<long, int> AnimalSkinMap = new Dictionary<long, int>();
-        internal static Dictionary<long, int> PetSkinMap = new Dictionary<long, int>();
-        internal static Dictionary<long, int> HorseSkinMap = new Dictionary<long, int>();
+        internal static Dictionary<string, List<AnimalSkin>> SkinAssets = new Dictionary<string, List<AnimalSkin>>();
 
-        // Short ID mappings. Short IDs are small, user-friendly numbers for referencing specific creatures.
+        // Skin mappings
+        //internal static Dictionary<long, int> AnimalSkinMap = new Dictionary<long, int>();
+        //internal static Dictionary<long, int> PetSkinMap = new Dictionary<long, int>();
+        //internal static Dictionary<long, int> HorseSkinMap = new Dictionary<long, int>();
+
+        internal static Dictionary<long, int> SkinMap = new Dictionary<long, int>();
+        // ID >> Category mappings
+        internal static Dictionary<long, CreatureCategory> IDToCategory = new Dictionary<long, CreatureCategory>();
+
+        // Short ID mappings for animals. Short IDs are small, user-friendly numbers for referencing specific creatures.
         internal static Dictionary<long, int> AnimalLongToShortIDs = new Dictionary<long, int>();
         internal static Dictionary<int, long> AnimalShortToLongIDs = new Dictionary<int, long>();
 
@@ -102,11 +106,9 @@ namespace AdoptSkin
             // Config settings
             Config = this.Helper.ReadConfig<ModConfig>();
 
-            // SMAPI console command handler
+            // Internal helpers
             Commander = new CommandHandler(this);
-            // Pet and Horse creation handler
             Creator = new CreationHandler(this);
-            // Save/Load logic handler
             SaverLoader = new SaveLoadHandler(this);
 
             // Event Listeners
@@ -133,6 +135,7 @@ namespace AdoptSkin
             // DEBUG
             if (Config.DebuggingMode)
             {
+                // ** TODO: Make debug commands line up with the lack of a need to call categories anymore
                 helper.ConsoleCommands.Add("debug_reset", "DEBUG: ** WARNING ** Resets all skins and creature IDs, but ensures that all creatures are properly in the Adopt & Skin system.", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_skinmaps", "DEBUG: Prints all info in current skin maps", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_idmaps", "DEBUG: Prints AnimalLongToShortIDs", Commander.OnCommandReceived);
@@ -209,6 +212,51 @@ namespace AdoptSkin
         }
 
 
+        /// <summary>Returns true if the given Character is of the given CreatureCategory type (Animal, Pet, or Horse)</summary>
+        public static bool IsCreatureType(Character character, CreatureCategory category)
+        {
+            if (character is FarmAnimal && category == CreatureCategory.Animal)
+                return true;
+            else if (character is Pet && category == CreatureCategory.Pet)
+                return true;
+            else if (character is Horse && category == CreatureCategory.Horse)
+                return true;
+            return false;
+        }
+
+
+        public static bool IsInDatabase(Character character)
+        {
+            if (character == null)
+                return false;
+            else if (character is FarmAnimal animal && IDToCategory.ContainsKey(animal.myID.Value) && IDToCategory[animal.myID.Value] == CreatureCategory.Animal)
+                return true;
+            else if (character is Pet pet && IDToCategory.ContainsKey(pet.Manners) && IDToCategory[pet.Manners] == CreatureCategory.Pet)
+                return true;
+            else if (character is Horse horse && IDToCategory.ContainsKey(horse.Manners) && IDToCategory[horse.Manners] == CreatureCategory.Horse)
+                return true;
+            return false;
+        }
+
+        
+        /// <summary>Returns the CreatureCategory type of the creature associated with the given ID</summary>
+        public static CreatureCategory GetCreatureCategory(long id)
+        {
+            if (IDToCategory.ContainsKey(id))
+                return IDToCategory[id];
+            // Creature not in system
+            return CreatureCategory.Null;
+        }
+
+
+        public static bool IsNotATractor(Horse horse)
+        {
+            if (!horse.Name.StartsWith("tractor/"))
+                return true;
+            return false;
+        }
+
+
 
 
 
@@ -231,7 +279,7 @@ namespace AdoptSkin
             // Teleport the first horse you find that the player actually owns
             foreach (Horse taxi in GetHorses())
             {
-                if (HorseSkinMap.ContainsKey(taxi.Manners))
+                if (IsInDatabase(taxi) && IsCreatureType(taxi, CreatureCategory.Horse) && !WildHorse.IsWildHorse(taxi))
                 {
                     Game1.warpCharacter(taxi, Game1.player.currentLocation, Game1.player.getTileLocation());
                     return;
@@ -266,7 +314,7 @@ namespace AdoptSkin
             Vector2 stableWarp = new Vector2(stableX, stableY);
             foreach (Horse horse in ModEntry.GetHorses())
             {
-                if (ModEntry.HorseSkinMap.ContainsKey(horse.Manners))
+                if (IsInDatabase(horse) && IsCreatureType(horse, CreatureCategory.Horse) && !WildHorse.IsWildHorse(horse))
                     Game1.warpCharacter(horse, "farm", stableWarp);
             }
 
@@ -274,9 +322,19 @@ namespace AdoptSkin
         }
 
 
-        /// <summary>Returns the creature of the given category and ID</summary>
-        internal static Character GetCreature(CreatureCategory creatureCategory, long id)
+        /// <summary>Returns the creature of the given Long IDs.</summary>
+        internal static Character GetCreature(long id)
         {
+            
+            if (!IDToCategory.ContainsKey(id) && !AnimalShortToLongIDs.ContainsKey((int)id))
+                return null;
+
+            CreatureCategory creatureCategory = CreatureCategory.Null;
+            if (IDToCategory.ContainsKey(id))
+                creatureCategory = IDToCategory[id];
+            else
+                creatureCategory = CreatureCategory.Animal;
+
             switch (creatureCategory)
             {
                 case CreatureCategory.Horse:
@@ -292,9 +350,14 @@ namespace AdoptSkin
                     break;
 
                 case CreatureCategory.Animal:
+                    ModEntry.SMonitor.Log("GetCreature: Enter animal", LogLevel.Info);
                     foreach (FarmAnimal animal in GetAnimals())
-                        if (id == animal.myID.Value)
+                    {
+                        ModEntry.SMonitor.Log($"Animal: {animal.myID.Value}, In Long>Short? {AnimalLongToShortIDs.ContainsKey(animal.myID.Value)}", LogLevel.Info);
+                        if (id == animal.myID.Value || (AnimalLongToShortIDs.ContainsKey(animal.myID.Value) && AnimalLongToShortIDs[animal.myID.Value] == id))
                             return animal;
+                    }
+
                     break;
 
                 default:
@@ -340,17 +403,17 @@ namespace AdoptSkin
                         return null;
 
                     // A wild horse is being checked
-                    if (horse.Manners == WildHorse.WildID)
+                    if (WildHorse.IsWildHorse(horse))
                         return GetSkinFromID(horse.GetType().Name, Creator.HorseInfo.SkinID);
                     // Horse is not in system
-                    else if (horse.Manners == 0 || !HorseSkinMap.ContainsKey(horse.Manners))
+                    else if (!IsInDatabase(horse))
                     {
                         this.Monitor.Log($"Horse not in system: {horse.Name}", LogLevel.Error);
                         return null;
                     }
 
                     // Ensure skin ID given is a valid number for the given horse type
-                    int horseSkinID = HorseSkinMap[horse.Manners];
+                    int horseSkinID = SkinMap[horse.Manners];
                     if (horseSkinID < 1 || horseSkinID > HorseAssets[Sanitize(horse.GetType().Name)].Count)
                     {
                         this.Monitor.Log($"{horse.Name}'s skin ID no longer exists in `/assets/skins`. Skin will be randomized.", LogLevel.Alert);
@@ -362,25 +425,26 @@ namespace AdoptSkin
 
                 case Pet pet:
                     string petType = Sanitize(pet.GetType().Name);
-
                     // Break out of unhandled types
                     if (!ModApi.GetHandledPetTypes().Contains(petType))
                         break;
+
+                    // No pet skins are loaded for this pet type
                     else if (PetAssets[Sanitize(pet.GetType().Name)].Count == 0)
                         return null;
 
                     // A stray pet is being checked
-                    if (pet.Manners == Stray.StrayID)
+                    if (Stray.IsStray(pet))
                         return GetSkinFromID(pet.GetType().Name, Creator.StrayInfo.SkinID);
                     // Pet is not in system
-                    else if (pet.Manners == 0 || !PetSkinMap.ContainsKey(pet.Manners))
+                    else if (!IsInDatabase(pet))
                     {
                         this.Monitor.Log($"Pet not in system: {pet.Name}", LogLevel.Error);
                         return null;
                     }
 
                     // Ensure skin ID given is a current valid number for the given pet type
-                    int petSkinID = PetSkinMap[pet.Manners];
+                    int petSkinID = SkinMap[pet.Manners];
                     if (petSkinID < 1 || petSkinID > PetAssets[petType].Count)
                     {
                         this.Monitor.Log($"{pet.Name}'s skin ID no longer exists in `/assets/skins`. Skin will be randomized.", LogLevel.Alert);
@@ -390,10 +454,11 @@ namespace AdoptSkin
 
                 case FarmAnimal animal:
                     string animalType = Sanitize(animal.type.Value);
-
                     // Break out of unhandled types
                     if (!ModApi.GetHandledAnimalTypes().Contains(animalType))
                         break;
+
+                    // No farm animal skins are loaded for this animal type
                     else if (AnimalAssets[Sanitize(animal.type.Value)].Count == 0)
                         return null;
 
@@ -404,11 +469,11 @@ namespace AdoptSkin
                         animalType = "sheared" + animalType;
 
                     // Animal is not in system
-                    if (!AnimalSkinMap.ContainsKey(animal.myID.Value))
+                    if (!IsInDatabase(animal))
                         return null;
 
                     // Ensure skin ID given is a current valid number for the given animal type
-                    int animalSkinID = AnimalSkinMap[animal.myID.Value];
+                    int animalSkinID = SkinMap[animal.myID.Value];
                     if (animalSkinID < 1 || animalSkinID > AnimalAssets[animalType].Count)
                     {
                         this.Monitor.Log($"{animal.Name}'s skin ID is no longer exists in `/assets/skins`. Skin will be randomized.", LogLevel.Alert);
@@ -450,21 +515,24 @@ namespace AdoptSkin
             switch (creature)
             {
                 case Horse horse:
-                    if (HorseAssets[Sanitize(horse.GetType().Name)].Count == 0)
+                    if (HorseAssets[Sanitize(horse.GetType().Name)].Count == 0 || !IsInDatabase(horse))
                         return 0;
-                    HorseSkinMap[horse.Manners] = skinID;
+                    SkinMap[horse.Manners] = skinID;
                     break;
 
                 case Pet pet:
-                    if (PetAssets[Sanitize(pet.GetType().Name)].Count == 0)
+                    if (PetAssets[Sanitize(pet.GetType().Name)].Count == 0 || !IsInDatabase(pet))
                         return 0;
-                    PetSkinMap[pet.Manners] = skinID;
+                    SkinMap[pet.Manners] = skinID;
                     break;
 
                 case FarmAnimal animal:
-                    if (AnimalAssets[Sanitize(animal.type.Value)].Count == 0)
+                    if (AnimalAssets[Sanitize(animal.type.Value)].Count == 0 || !IsInDatabase(animal))
+                    {
+                        Monitor.Log($"Animal not in database or has no skins", LogLevel.Error);
                         return 0;
-                    AnimalSkinMap[animal.myID.Value] = skinID;
+                    }
+                    SkinMap[animal.myID.Value] = skinID;
                     break;
 
                 default:
@@ -476,42 +544,23 @@ namespace AdoptSkin
         }
 
 
-        /// <summary>Returns an unused Short ID value for the given creature type to use.</summary>
-        private int GetUnusedShortID(CreatureCategory creatureCategory)
+        /// <summary>Returns an unused Short ID for a new creature to use.</summary>
+        private int GetUnusedShortID()
         {
             int newShortID = 1;
 
-            switch (creatureCategory)
-            {
-                case CreatureCategory.Horse:
-                    List<int> usedHorseIDs = new List<int>();
-                    foreach (Horse horse in GetHorses())
-                        usedHorseIDs.Add(horse.Manners);
+            // Gather all current ShortIDs
+            List<int> usedIDs = new List<int>();
+            foreach (Horse horse in GetHorses())
+                usedIDs.Add(horse.Manners);
+            foreach (Pet pet in GetPets())
+                usedIDs.Add(pet.Manners);
+            foreach (int shortID in AnimalShortToLongIDs.Keys)
+                usedIDs.Add(shortID);
 
-                    while (usedHorseIDs.Contains(newShortID))
-                        newShortID++;
-
-                    break;
-
-                case CreatureCategory.Pet:
-                    List<int> usedPetIDs = new List<int>();
-                    foreach (Pet pet in GetPets())
-                        usedPetIDs.Add(pet.Manners);
-
-                    while (usedPetIDs.Contains(newShortID))
-                        newShortID++;
-
-                    break;
-
-                case CreatureCategory.Animal:
-                    while (AnimalShortToLongIDs.ContainsKey(newShortID))
-                        newShortID++;
-                    break;
-
-                default:
-                    break;
-            }
-
+            // Find an unused ShortID and return it
+            while (usedIDs.Contains(newShortID))
+                newShortID++;
             return newShortID;
         }
 
@@ -524,67 +573,14 @@ namespace AdoptSkin
         ** Save/Load/Update logic
         *************************/
 
-        internal static void UpdateScream(object sender, UpdateTickedEventArgs e)
-        {
-            SMonitor.Log("UPDATE TICK", LogLevel.Alert);
-        }
 
         internal void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
         {
+            // Check if a horse being ridden has been dismounted. If so, re-add it to the map.
+            HorseRidingCheck();
 
-            // -- Check if a horse being ridden has been dismounted. If so, re-add it to the map. --
-            List<Horse> dismounted = new List<Horse>();
-            foreach (Horse horse in BeingRidden)
-            {
-                if (horse.rider == null)
-                {
-                    GameLocation loc = horse.currentLocation;
-                    Game1.removeThisCharacterFromAllLocations(horse);
-                    loc.addCharacter(horse);
-                    dismounted.Add(horse);
-                }
-                else if (Config.OneTileHorse)
-                {
-                    horse.squeezeForGate();
-                }
-            }
-            // Remove any dismounted horses from the list of horses currently being ridden
-            if (dismounted.Count > 0)
-                foreach (Horse horse in dismounted)
-                    BeingRidden.Remove(horse);
-
-
-            // -- Check that animal list is up to date. If not, add/remove animal in system. --
-            if (Game1.getFarm() != null && AnimalCount != Game1.getFarm().getAllFarmAnimals().Count)
-            {
-                List<long> existingAnimals = new List<long>();
-                List<FarmAnimal> newAnimals = new List<FarmAnimal>();
-
-                // Check for new animals and populate lists containing existing and new animals
-                foreach (FarmAnimal animal in GetAnimals())
-                {
-                    if (!AnimalSkinMap.ContainsKey(animal.myID.Value))
-                        newAnimals.Add(animal);
-                    else
-                        existingAnimals.Add(animal.myID.Value);
-                }
-
-                // Check for removed animals
-                List<long> animalsToRemove = new List<long>();
-                foreach (long id in AnimalSkinMap.Keys)
-                    if (!existingAnimals.Contains(id))
-                        animalsToRemove.Add(id);
-                // Remove animals no longer on farm
-                foreach (long id in animalsToRemove)
-                    RemoveCreature(CreatureCategory.Animal, id);
-
-                // Add new animals
-                foreach (FarmAnimal animal in newAnimals)
-                    AddCreature(animal);
-
-                // Update last known animal count
-                AnimalCount = Game1.getFarm().getAllFarmAnimals().Count;
-            }
+            // Check that animal list is up to date. If not, add/remove animal in system.
+            AnimalListCheck();
 
 
             // -- Display name tooltips when hovering over a pet or horse
@@ -619,16 +615,90 @@ namespace AdoptSkin
         {
             foreach (NPC npc in e.Removed)
                 if (npc is Horse horse && horse.rider != null && horse.Manners != 0)
+                {
                     BeingRidden.Add(horse);
+                    if (Config.OneTileHorse)
+                        horse.squeezeForGate();
+                }
+        }
+
+
+        /// <summary>Checks horses known to be being ridden and re-adds them to the map if they've been dismounted.</summary>
+        internal static void HorseRidingCheck()
+        {
+            List<Horse> dismounted = new List<Horse>();
+            foreach (Horse horse in BeingRidden)
+            {
+                if (horse.rider == null)
+                {
+                    GameLocation loc = horse.currentLocation;
+                    Game1.removeThisCharacterFromAllLocations(horse);
+                    loc.addCharacter(horse);
+                    dismounted.Add(horse);
+                }
+            }
+            // Remove any dismounted horses from the list of horses currently being ridden
+            if (dismounted.Count > 0)
+                foreach (Horse horse in dismounted)
+                    BeingRidden.Remove(horse);
+        }
+
+
+        internal void AnimalListCheck()
+        {
+            if (Game1.getFarm() != null && AnimalCount != Game1.getFarm().getAllFarmAnimals().Count)
+            {
+                List<long> existingAnimals = new List<long>();
+                List<FarmAnimal> newAnimals = new List<FarmAnimal>();
+
+                // Check for new animals and populate lists containing existing and new animals
+                foreach (FarmAnimal animal in GetAnimals())
+                {
+                    if (!IsInDatabase(animal))
+                        newAnimals.Add(animal);
+                    else
+                        existingAnimals.Add(animal.myID.Value);
+                }
+
+                // Check for removed animals
+                List<long> animalsToRemove = new List<long>();
+                foreach (long id in SkinMap.Keys)
+                    if (IDToCategory[id] == CreatureCategory.Animal && !existingAnimals.Contains(id))
+                        animalsToRemove.Add(id);
+                // Remove animals no longer on farm
+                foreach (long id in animalsToRemove)
+                {
+                    Monitor.Log($"Removing animal, id: {id}", LogLevel.Warn);
+                    RemoveCreature(id);
+                }
+
+                // Add new animals
+                foreach (FarmAnimal animal in newAnimals)
+                {
+                    Monitor.Log($"Adding new animal: {animal.type.Value}, {animal.Name}", LogLevel.Warn);
+                    AddCreature(animal);
+                }
+
+                // Update last known animal count
+                AnimalCount = Game1.getFarm().getAllFarmAnimals().Count;
+            }
         }
 
 
         /// <summary>Checks for the arrival of the player's first pet and adds it to the system.</summary>
         internal void CheckForFirstPet(object sender, NpcListChangedEventArgs e)
         {
-            // Check for the arrival of the vanilla pet and add it to the system.
-            if (PetSkinMap.Count == 0)
+            // First check after load from save, first pet known to exist
+            if (Creator.FirstPetReceived)
             {
+                this.Helper.Events.World.NpcListChanged -= this.CheckForFirstPet;
+                Creator.PlaceBetBed();
+                return;
+            }
+
+            if (e != null)
+            {
+                // Check for the arrival of the vanilla first pet
                 foreach (NPC npc in e.Added)
                     if (npc is Pet pet)
                     {
@@ -639,15 +709,32 @@ namespace AdoptSkin
                         return;
                     }
             }
+
+            // A pet already exists in the system, wasn't in the save loaded variables due to older A&S version
+            foreach (CreatureCategory category in IDToCategory.Values)
+                if (category == CreatureCategory.Pet)
+                {
+                    Creator.FirstPetReceived = true;
+                    this.Helper.Events.World.NpcListChanged -= this.CheckForFirstPet;
+                    Creator.PlaceBetBed();
+                    return;
+                }
         }
 
 
         /// <summary>Checks for the arrival of the player's first horse and adds it to the system.</summary>
         internal void CheckForFirstHorse(object sender, NpcListChangedEventArgs e)
         {
-            // Check for the arrival of the vanilla horse and add it to the system.
-            if (HorseSkinMap.Count == 0)
+            // First check after load from save, first horse known to exist
+            if (Creator.FirstHorseReceived)
             {
+                this.Helper.Events.World.NpcListChanged -= this.CheckForFirstHorse;
+                return;
+            }
+
+            if (e.Added != null)
+            {
+                // Check for the arrival of the vanilla horse
                 foreach (NPC npc in e.Added)
                     if (npc is Horse horse)
                     {
@@ -661,13 +748,15 @@ namespace AdoptSkin
                         return;
                     }
             }
-            // Horse already known
-            else
-            {
-                Creator.FirstHorseReceived = true;
-                this.Helper.Events.World.NpcListChanged -= this.CheckForFirstHorse;
-                return;
-            }
+
+            // A horse already exists in the system, wasn't in the save loaded variables due to older A&S version
+            foreach (CreatureCategory category in IDToCategory.Values)
+                if (category == CreatureCategory.Horse)
+                {
+                    Creator.FirstHorseReceived = true;
+                    this.Helper.Events.World.NpcListChanged -= this.CheckForFirstHorse;
+                    return;
+                }
         }
 
 
@@ -704,7 +793,7 @@ namespace AdoptSkin
             switch (creature)
             {
                 case Horse horse:
-                    if (Creator.HorseInfo != null && horse.Manners == WildHorse.WildID)
+                    if (WildHorse.IsWildHorse(horse))
                     {
                         horse.Sprite = new AnimatedSprite(GetSkinFromID(horse.GetType().Name, Creator.HorseInfo.SkinID).AssetKey, 0, 32, 32);
                         break;
@@ -715,7 +804,7 @@ namespace AdoptSkin
                     break;
 
                 case Pet pet:
-                    if (Creator.StrayInfo != null && pet.Manners == Stray.StrayID)
+                    if (Stray.IsStray(pet))
                     {
                         pet.Sprite = new AnimatedSprite(GetSkinFromID(pet.GetType().Name, Creator.StrayInfo.SkinID).AssetKey, 28, 32, 32);
                         break;
@@ -742,53 +831,70 @@ namespace AdoptSkin
         /// <param name="skin">Optional parameter. Given when a creature is being created with a predetermined skin.</param>
         internal void AddCreature(Character creature, int skin = 0)
         {
+            // Creature is already in the system or is invalid
+            if (IsInDatabase(creature) || creature == null)
+                return;
+
+            CreateSystemIDs(creature);
+
+            // Give a skin
+            if (skin == 0)
+                SkinMap[GetLongID(creature)] = SetRandomSkin(creature);
+            else
+                SetSkin(creature, skin);
+
+            if (creature is FarmAnimal animal)
+            {
+                Monitor.Log($"End of AddCreature. {animal.type.Value} {animal.Name}:: Short {AnimalLongToShortIDs[animal.myID.Value]}   Skin {GetSkin(animal).ID}", LogLevel.Alert);
+            }
+        }
+
+
+        /// <summary>Removes a creature from the Adopt & Skin system.</summary>
+        internal void RemoveCreature(long id)
+        {
+            Character creature = GetCreature(id);
+            if (!IsInDatabase(creature))
+                return;
+
+            // Remove ShortID from animal ID lists
+            if (IsCreatureType(creature, CreatureCategory.Animal))
+            {
+                // Remove from ShortID lists
+                int shortID = AnimalLongToShortIDs[id];
+                AnimalLongToShortIDs.Remove(id);
+                AnimalShortToLongIDs.Remove(shortID);
+            }
+
+            // Remove from general skin map
+            SkinMap.Remove(id);
+
+            // Remove from ID >> Category list
+            IDToCategory.Remove(id);
+        }
+
+
+        /// <summary>Creates and stores the long and ShortIDs for the given creature being added into the system</summary>
+        private void CreateSystemIDs(Character creature)
+        {
+            int newShortID = GetUnusedShortID();
+
             switch (creature)
             {
                 case Horse horse:
-                    // Horse is already in system
-                    if (HorseSkinMap.ContainsKey(horse.Manners))
-                        break;
-
-                    // Assign a ShortID to the horse
-                    horse.Manners = GetUnusedShortID(CreatureCategory.Horse);
-
-                    // Set horse's skin
-                    if (skin == 0)
-                        HorseSkinMap[horse.Manners] = SetRandomSkin(horse);
-                    else
-                        SetSkin(horse, skin);
+                    horse.Manners = newShortID;
+                    IDToCategory[horse.Manners] = CreatureCategory.Horse;
                     break;
 
                 case Pet pet:
-                    // Pet is already in the system
-                    if (PetSkinMap.ContainsKey(pet.Manners))
-                        break;
-
-                    // Assign a ShortID to the pet
-                    pet.Manners = GetUnusedShortID(CreatureCategory.Pet);
-
-                    // Set pet's skin
-                    if (skin == 0)
-                        PetSkinMap[pet.Manners] = SetRandomSkin(pet);
-                    else
-                        SetSkin(pet, skin);
+                    pet.Manners = newShortID;
+                    IDToCategory[pet.Manners] = CreatureCategory.Pet;
                     break;
 
                 case FarmAnimal animal:
-                    // Animal is already in system
-                    if (AnimalSkinMap.ContainsKey(animal.myID.Value))
-                        break;
-
-                    // Assign a ShortID to the animal
-                    int shortID = GetUnusedShortID(CreatureCategory.Animal);
-                    AnimalLongToShortIDs[animal.myID.Value] = shortID;
-                    AnimalShortToLongIDs[shortID] = animal.myID.Value;
-
-                    // Set animal's skin
-                    if (skin == 0)
-                        AnimalSkinMap[animal.myID.Value] = SetRandomSkin(animal);
-                    else
-                        SetSkin(animal, skin);
+                    AnimalLongToShortIDs[animal.myID.Value] = newShortID;
+                    AnimalShortToLongIDs[newShortID] = animal.myID.Value;
+                    IDToCategory[animal.myID.Value] = CreatureCategory.Animal;
                     break;
 
                 default:
@@ -797,43 +903,25 @@ namespace AdoptSkin
         }
 
 
-        /// <summary>Removes a creature from the Adopt & Skin system.</summary>
-        internal void RemoveCreature(CreatureCategory category, long id)
+        internal static long GetLongID(Character creature)
         {
-            switch (category)
-            {
-                case CreatureCategory.Horse:
-                    // Horse isn't in the system
-                    if (!HorseSkinMap.ContainsKey(id))
-                        return;
+            if (creature is Horse horse)
+                return horse.Manners;
+            else if (creature is Pet pet)
+                return pet.Manners;
+            else if (creature is FarmAnimal animal)
+                return animal.myID.Value;
+            return 0;
+        }
 
-                    HorseSkinMap.Remove(id);
-                    break;
 
-                case CreatureCategory.Pet:
-                    // Pet isn't in the system
-                    if (!PetSkinMap.ContainsKey(id))
-                        return;
-
-                    PetSkinMap.Remove(id);
-                    break;
-
-                case CreatureCategory.Animal:
-                    // Animal isn't in the system
-                    if (!AnimalSkinMap.ContainsKey(id))
-                        return;
-
-                    // Remove from ShortID lists
-                    int shortID = AnimalLongToShortIDs[id];
-                    AnimalLongToShortIDs.Remove(id);
-                    AnimalShortToLongIDs.Remove(shortID);
-
-                    AnimalSkinMap.Remove(id);
-                    break;
-
-                default:
-                    break;
-            }
+        internal static int GetShortID(Character creature)
+        {
+            if (creature is Horse || creature is Pet)
+                return (int)GetLongID(creature);
+            else if (creature is FarmAnimal animal)
+                return AnimalLongToShortIDs[animal.myID.Value];
+            return 0;
         }
 
 

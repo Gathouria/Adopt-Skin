@@ -50,7 +50,7 @@ namespace AdoptSkin.Framework
             PetInstance.farmerPassesThrough = true;
 
             // Put that thing where it belongs
-            Game1.warpCharacter(PetInstance as Pet, Marnies, CreationLocation);
+            Game1.warpCharacter(PetInstance, Marnies, CreationLocation);
 
             if (ModEntry.Config.NotifyStraySpawn)
             {
@@ -58,6 +58,14 @@ namespace AdoptSkin.Framework
                 ModEntry.SMonitor.Log(message, LogLevel.Debug);
                 Game1.chatBox.addInfoMessage(message);
             }
+        }
+
+
+        internal static bool IsStray(Pet pet)
+        {
+            if (pet.Manners == StrayID)
+                return true;
+            return false;
         }
 
 

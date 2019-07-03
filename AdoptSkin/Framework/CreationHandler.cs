@@ -57,20 +57,21 @@ namespace AdoptSkin.Framework
         /// <summary>Calculates variables that change each day</summary>
         internal void ProcessNewDay(object sender, DayStartedEventArgs e)
         {
-            // Positive luck will give a negative modifier, making it more likely that the random number is in the success range
-            int luckBonus = -(int)(Game1.dailyLuck * 100);
+            // Make the luck bonus into a percentage for our use
+            int luckBonus = (int)(Game1.dailyLuck * 100);
 
             // Luck affect has been turned off in the Config
             if (!ModEntry.Config.ChanceAffectedByLuck)
                 luckBonus = 0;
-
+            ModEntry.SMonitor.Log($"First pet received?: {FirstPetReceived}", LogLevel.Info);
             // Check chances for Stray and WildHorse to spawn, add creation to update loop if spawn should occur
-            if (ModEntry.Config.StraySpawn && FirstPetReceived && Randomizer.Next(0, 100) + luckBonus < StrayChance)
+            if (ModEntry.Config.StraySpawn && FirstPetReceived && Randomizer.Next(0, 100) - luckBonus < StrayChance)
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceStray;
-            if (ModEntry.Config.WildHorseSpawn && FirstHorseReceived && Randomizer.Next(0, 100) + luckBonus < WildHorseChance)
+            if (ModEntry.Config.WildHorseSpawn && FirstHorseReceived && Randomizer.Next(0, 100) - luckBonus < WildHorseChance)
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceWildHorse;
 
             // Spread out pets from around water dish
+            RainyWeatherPetSet();
             ModEntry.SHelper.Events.Player.Warped += this.SpreadPets;
         }
 
@@ -91,7 +92,7 @@ namespace AdoptSkin.Framework
         {
             if (!Game1.hasLoadedGame || !ModEntry.AssetsLoaded)
                 return;
-
+            ModEntry.SMonitor.Log("Placing Stray", LogLevel.Info);
             StrayInfo = new Stray();
             ModEntry.SHelper.Events.GameLoop.UpdateTicked -= this.PlaceStray;
         }
@@ -108,17 +109,35 @@ namespace AdoptSkin.Framework
         }
 
 
+        internal void MoveStrayToSpawn()
+        {
+            if (StrayInfo != null && StrayInfo.PetInstance != null)
+                Game1.warpCharacter(StrayInfo.PetInstance, Stray.Marnies, Stray.CreationLocation);
+        }
+
+
         internal void SpreadPets(object sender, WarpedEventArgs e)
         {
-            // Only warp pets on return to farm, and when the weather is proper for pets being outside
-            if (!(e.NewLocation is Farm) || Game1.isRaining || Game1.isLightning || Game1.isSnowing)
-                return;
-            // Make sure pets are not otherwise in the FarmHouse
             List<Pet> pets = ModEntry.GetPets().ToList();
-            if (!ModEntry.PetSkinMap.ContainsKey(pets[0].Manners) || !(pets[0].currentLocation is Farm))
+
+            // Ensure Stray isn't moved by vanilla
+            ModEntry.Creator.MoveStrayToSpawn();
+
+            // No pets are on the farm
+            if (pets.Count == 0)
                 return;
 
+            // If weather is poor, warp pets inside FarmHouse on return to FarmHouse or Farm
+            if ((e.NewLocation is Farm || e.NewLocation is FarmHouse) && (Game1.isRaining || Game1.isLightning || Game1.isSnowing))
+            {
+                RainyWeatherPetSet();
+                return;
+            }
+            // Only care about on return to farm after this point
+            else if (!(e.NewLocation is Farm))
+                return;
 
+            // Find area to warp pets to
             Farm farm = Game1.getFarm();
             int initX = (int)pets[0].getTileLocation().X;
             int initY = (int)pets[0].getTileLocation().Y;
@@ -152,12 +171,24 @@ namespace AdoptSkin.Framework
 
             // Warp pets
             foreach (Pet pet in ModEntry.GetPets())
-                if (ModEntry.PetSkinMap.ContainsKey(pet.Manners))
+                if (ModEntry.IsInDatabase(pet))
                 {
                     Vector2 ranTile = warpableTiles[Randomizer.Next(0, warpableTiles.Count)];
                     Game1.warpCharacter(pet, farm, ranTile);
                 }
 
+        }
+
+
+        internal void RainyWeatherPetSet()
+        {
+            if (!Game1.isRaining && !Game1.isLightning && !Game1.isSnowing)
+                return;
+
+            foreach (Pet pet in ModEntry.GetPets())
+                if (!Stray.IsStray(pet))
+                    pet.warpToFarmHouse(Game1.player);
+            return;
         }
 
 

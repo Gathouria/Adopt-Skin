@@ -96,6 +96,14 @@ namespace AdoptSkin.Framework
             SHelper.Events.Input.ButtonReleased -= ModEntry.HotKeyCheck;
 
             SHelper.Events.World.NpcListChanged -= ModEntry.SaveTheHorse;
+
+            // Ensure variables from other saves aren't carried over on return to title screen
+            ModEntry.SkinMap = new Dictionary<long, int>();
+            ModEntry.IDToCategory = new Dictionary<long, ModEntry.CreatureCategory>();
+            ModEntry.AnimalLongToShortIDs = new Dictionary<long, int>();
+            ModEntry.AnimalShortToLongIDs = new Dictionary<int, long>();
+            ModEntry.Creator.FirstPetReceived = false;
+            ModEntry.Creator.FirstHorseReceived = false;
         }
 
 
@@ -108,33 +116,44 @@ namespace AdoptSkin.Framework
                 return;
             }
 
-            // Load skin maps
-            ModEntry.AnimalSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("animal-skin-map") ?? new Dictionary<long, int>();
-            ModEntry.PetSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("pet-skin-map") ?? new Dictionary<long, int>();
-            ModEntry.HorseSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("horse-skin-map") ?? new Dictionary<long, int>();
-
+            // Load skin and category maps
+            ModEntry.SkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("skin-map") ?? new Dictionary<long, int>();
+            ModEntry.IDToCategory = SHelper.Data.ReadSaveData<Dictionary<long, ModEntry.CreatureCategory>>("id-to-category") ?? new Dictionary<long, ModEntry.CreatureCategory>();
+            
             // Load Short ID maps
             ModEntry.AnimalLongToShortIDs = SHelper.Data.ReadSaveData<Dictionary<long, int>>("animal-long-to-short-ids") ?? new Dictionary<long, int>();
             ModEntry.AnimalShortToLongIDs = SHelper.Data.ReadSaveData<Dictionary<int, long>>("animal-short-to-long-ids") ?? new Dictionary<int, long>();
 
-            // Load whether the first pet and/or first horse have been received
-            LoadAdoptableVars();
+            // Set up maps if save data is from an older A&S
+            if (ModEntry.SkinMap.Count == 0)
+                LoadSkinsOldVersion();
+
+            // Load received first pet/horse status
+            ModEntry.Creator.FirstHorseReceived = bool.Parse(SHelper.Data.ReadSaveData<string>("first-horse-received") ?? "false");
+            ModEntry.Creator.FirstPetReceived = bool.Parse(SHelper.Data.ReadSaveData<string>("first-pet-received") ?? "false");
+            Entry.CheckForFirstPet(null, null);
+            Entry.CheckForFirstHorse(null, null);
 
             // Refresh skins via skinmap
             LoadCreatureSkins();
+
+            ModEntry.SMonitor.Log($"{string.Join("\n", ModEntry.IDToCategory)}", LogLevel.Info);
 
             // Make sure Marnie's cows put some clothes on
             foreach (GameLocation loc in Game1.locations)
             {
                 if (loc is Forest forest)
                     foreach (FarmAnimal animal in forest.marniesLivestock)
-                        animal.Sprite = new AnimatedSprite(ModEntry.GetSkinFromID(ModEntry.Sanitize(animal.type.Value),
-                            Randomizer.Next(1, ModEntry.AnimalAssets[ModEntry.Sanitize(animal.type.Value)].Count)).AssetKey, 0, 32, 32);
+                    {
+                        if (ModEntry.AnimalAssets.Keys.Count != 0 && ModEntry.AnimalAssets[ModEntry.Sanitize(animal.type.Value)].Count != 0)
+                            animal.Sprite = new AnimatedSprite(ModEntry.GetSkinFromID(ModEntry.Sanitize(animal.type.Value),
+                                Randomizer.Next(1, ModEntry.AnimalAssets[ModEntry.Sanitize(animal.type.Value)].Count)).AssetKey, 0, 32, 32);
+                    }
             }
 
             // Set configuration for walk-through pets
             foreach (Pet pet in ModEntry.GetPets())
-                if (pet.Manners != Stray.StrayID)
+                if (!Stray.IsStray(pet))
                 {
                     if (ModEntry.Config.WalkThroughPets)
                         pet.farmerPassesThrough = true;
@@ -150,87 +169,62 @@ namespace AdoptSkin.Framework
         }
 
 
-        /// <summary>Loads the information on whether the first pet and/or first horse have been received by the player</summary>
-        internal static void LoadAdoptableVars()
-        {
-            // Load FirstPetReceived bool
-            string petReceived = SHelper.Data.ReadSaveData<string>("first-pet-received") ?? null;
-            if (petReceived != null)
-            {
-                ModEntry.Creator.FirstPetReceived = bool.Parse(petReceived);
-                // Place pet bed onto map if player can adopt pets
-                if (ModEntry.Creator.FirstPetReceived)
-                    ModEntry.Creator.PlaceBetBed();
-            }
-            else
-            {
-                // File is new to A&S or is from an older version. Re-check for this variable best you can.
-                if (ModEntry.PetSkinMap.Count > 0 || ModEntry.GetPets().ToList().Count > 0)
-                {
-                    ModEntry.Creator.FirstPetReceived = true;
-                    Game1.addMailForTomorrow("MarnieStrays");
-                    SHelper.Events.GameLoop.DayStarted += ModEntry.PlaceBedTomorrow;
-                }
-                else
-                {
-                    ModEntry.Creator.FirstPetReceived = false;
-                    SHelper.Events.World.NpcListChanged += Entry.CheckForFirstPet;
-                }
-            }
-
-            // Load FirstHorseReceived bool
-            string horseReceived = SHelper.Data.ReadSaveData<string>("first-horse-received") ?? null;
-            if (horseReceived != null)
-                ModEntry.Creator.FirstHorseReceived = bool.Parse(horseReceived);
-            else
-            {
-                // File is new to A&S or is from an older version. Re-check for this variable best you can.
-                if (ModEntry.HorseSkinMap.Count > 0 || ModEntry.GetHorses().ToList().Count > 0)
-                    ModEntry.Creator.FirstHorseReceived = true;
-                else
-                    ModEntry.Creator.FirstHorseReceived = false;
-            }
-        }
-
-
         /// <summary>Refreshes creature information based on how much information the save file contains</summary>
         internal static void LoadCreatureSkins()
         {
-            // File is new to A&S. Add all creatures into the system
-            if (ModEntry.AnimalSkinMap.Count == 0 && ModEntry.PetSkinMap.Count == 0 && ModEntry.HorseSkinMap.Count == 0)
+            foreach (FarmAnimal animal in ModEntry.GetAnimals())
+                if (ModEntry.IsInDatabase(animal))
+                    Entry.UpdateSkin(animal);
+
+            foreach (Pet pet in ModEntry.GetPets())
+                // Remove extra Strays left on the map
+                if (Stray.IsStray(pet))
+                    Game1.removeThisCharacterFromAllLocations(pet);
+                else if (ModEntry.IsInDatabase(pet))
+                    Entry.UpdateSkin(pet);
+
+            foreach (Horse horse in ModEntry.GetHorses())
+                // Remove extra WildHorses left on the map
+                if (WildHorse.IsWildHorse(horse))
+                        Game1.removeThisCharacterFromAllLocations(horse);
+                else if (ModEntry.IsInDatabase(horse))
+                    Entry.UpdateSkin(horse);
+        }
+
+
+        internal static void LoadSkinsOldVersion()
+        {
+            // Load pet information stored from older version formats
+            Dictionary<long, int> petSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("pet-skin-map") ?? new Dictionary<long, int>();
+            foreach (Pet pet in ModEntry.GetPets())
             {
-                foreach (FarmAnimal animal in ModEntry.GetAnimals())
-                    Entry.AddCreature(animal);
-                foreach (Pet pet in ModEntry.GetPets())
+                if (!Stray.IsStray(pet) && petSkinMap.ContainsKey(pet.Manners))
+                    Entry.AddCreature(pet, petSkinMap[pet.Manners]);
+                else if (!Stray.IsStray(pet))
                     Entry.AddCreature(pet);
-                foreach (Horse horse in ModEntry.GetHorses())
+            }
+
+
+            // Load horse information stored from older version formats
+            Dictionary<long, int> horseSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("horse-skin-map") ?? new Dictionary<long, int>();
+            foreach (Horse horse in ModEntry.GetHorses())
+            {
+                if (!WildHorse.IsWildHorse(horse) && ModEntry.IsNotATractor(horse) && horseSkinMap.ContainsKey(horse.Manners))
+                    Entry.AddCreature(horse, horseSkinMap[horse.Manners]);
+                else if (!WildHorse.IsWildHorse(horse) && ModEntry.IsNotATractor(horse))
                     Entry.AddCreature(horse);
             }
-            // Refresh skins on creatures + add creatures to system if the save is an older version
-            else
+
+
+            // Load animal information stored from older version formats
+            Dictionary<long, int> animalSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("animal-skin-map") ?? new Dictionary<long, int>();
+            ModEntry.SMonitor.Log($"animalSkinMap: {string.Join("\n", animalSkinMap)}", LogLevel.Warn);
+            foreach (FarmAnimal animal in ModEntry.GetAnimals())
             {
-                foreach (FarmAnimal animal in ModEntry.GetAnimals())
-                    if (!ModEntry.AnimalLongToShortIDs.ContainsKey(animal.myID.Value))
-                        Entry.AddCreature(animal);
-                    else
-                        Entry.UpdateSkin(animal);
-                foreach (Pet pet in ModEntry.GetPets())
-                    if (pet.Manners == 0)
-                        Entry.AddCreature(pet);
-                    // Remove extra Strays left on map
-                    else if (pet.Manners == Stray.StrayID && (ModEntry.Creator.StrayInfo == null || ModEntry.Creator.StrayInfo.PetInstance != pet))
-                        Game1.removeThisCharacterFromAllLocations(pet);
-                    else
-                        Entry.UpdateSkin(pet);
-                foreach (Horse horse in ModEntry.GetHorses())
-                    // Don't add tractors to the system
-                    if (horse.Manners == 0 && !horse.Name.StartsWith("tractor/"))
-                        Entry.AddCreature(horse);
-                    // Remove extra WildHorses left on the map
-                    else if (horse.Manners == WildHorse.WildID && (ModEntry.Creator.HorseInfo == null || ModEntry.Creator.HorseInfo.HorseInstance != horse))
-                        Game1.removeThisCharacterFromAllLocations(horse);
-                    else if (!horse.Name.StartsWith("tractor/"))
-                        Entry.UpdateSkin(horse);
+                if (animalSkinMap.ContainsKey(animal.myID.Value))
+                    Entry.AddCreature(animal, animalSkinMap[animal.myID.Value]);
+                else
+                    Entry.AddCreature(animal);
             }
         }
 
@@ -244,10 +238,9 @@ namespace AdoptSkin.Framework
             // Remove Adopt & Skin from update loop
             StopUpdateChecks(null, null);
 
-            // Save skin maps
-            SHelper.Data.WriteSaveData("animal-skin-map", ModEntry.AnimalSkinMap);
-            SHelper.Data.WriteSaveData("pet-skin-map", ModEntry.PetSkinMap);
-            SHelper.Data.WriteSaveData("horse-skin-map", ModEntry.HorseSkinMap);
+            // Save skin and category maps
+            SHelper.Data.WriteSaveData("skin-map", ModEntry.SkinMap);
+            SHelper.Data.WriteSaveData("id-to-category", ModEntry.IDToCategory);
 
             // Save Short ID maps
             SHelper.Data.WriteSaveData("animal-long-to-short-ids", ModEntry.AnimalLongToShortIDs);
@@ -256,15 +249,9 @@ namespace AdoptSkin.Framework
             // Save Stray and WildHorse spawn potential
             SHelper.Data.WriteSaveData("first-pet-received", ModEntry.Creator.FirstPetReceived.ToString());
             SHelper.Data.WriteSaveData("first-horse-received", ModEntry.Creator.FirstHorseReceived.ToString());
-            // If player returns to title screen, ensure that they don't carry the variable to another file
-            ModEntry.Creator.FirstPetReceived = false;
-            ModEntry.Creator.FirstHorseReceived = false;
 
             // Save data version. May be used for reverse-compatibility for files.
-            SHelper.Data.WriteSaveData("data-version", "3");
-
-            //SHelper.Events.GameLoop.DayStarted -= ModEntry.Creator.ProcessNewDay;
-            //SHelper.Events.GameLoop.DayEnding -= ModEntry.Creator.ProcessEndDay;
+            SHelper.Data.WriteSaveData("data-version", "4");
         }
 
 
