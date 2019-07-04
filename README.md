@@ -99,13 +99,16 @@ If you know what you're doing (a.k.a I am not user support for BFAV, and am also
 > The commands went through an overhaul with the release of 2.X. If you're used to the old commands, or are confused on how to use them in general, refer to the explanations and example of the commands above.
 
 **Why aren't the skins showing up?**
-> First make sure that you've placed skins in /assets/skins, as A&S does not come with many skins of its own- only a few example skins. Second, check the file naming guide below. Third, if you're still having problems or are confused, feel free to post a comment or ask on the SDV discord's modding channel!
+> First make sure that you've placed skins in `/assets/skins`, as A&S does not come with many skins of its own- only a few example skins. Second, check the file naming guide below. Third, if you're still having problems or are confused, feel free to post a comment or ask on the SDV discord's modding channel!
 
 **Why aren't my BFAV animal skins working?**
 > Make sure the skins are named exactly as they appear in the BFAV Config file. Some BFAV animals have "color variants", that work just like how brown chickens and white chickens do, in that they're each treated as a completely different animal. You'll have to name skins for each variant.
 
 **Can I use A&S in multiplayer?**
 > Conditionally. Multipet/multihorse isn't yet tested in multiplayer, but the skins work! Multiplayer multipet/multihorse is currently being worked on.
+
+**Can I reskin the petbed at Marnie's?**
+> Sure can. Just make sure your image is named `petbed.png` and is the same size as the one in `AdoptSkin/assets/`. Then just replace that image with yours!
 
 **I don't see any stray pets at Marnie's!**
 > Strays only start appearing the day after you've received your first pet from Marnie in-game, and don't appear every day. The chance of them appearing can be altered in the Config file.
