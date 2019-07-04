@@ -36,18 +36,18 @@ namespace AdoptSkin.Framework
         internal Stray()
         {
             // Create Stray traits
-            PetType = ModEntry.PetAssets.Keys.ToList()[Randomizer.Next(0, ModEntry.PetAssets.Count)];
-            SkinID = Randomizer.Next(1, ModEntry.PetAssets[PetType].Count + 1);
+            PetType = ModEntry.PetTypeMap.Keys.ToList()[Randomizer.Next(0, ModEntry.PetTypeMap.Count)];
+            SkinID = Randomizer.Next(1, ModEntry.Assets[PetType].Count + 1);
 
             // Create Pet instance
             PetInstance = (Pet)Activator.CreateInstance(ModEntry.PetTypeMap[PetType], (int)CreationLocation.X, (int)CreationLocation.Y);
-            PetInstance.Sprite = new AnimatedSprite(ModEntry.GetSkinFromID(PetType, SkinID).AssetKey, 28, 32, 32);
-
-            // Temporary Stray traits
             PetInstance.Manners = StrayID;
             PetInstance.Name = "Stray";
             PetInstance.displayName = "Stray";
             PetInstance.farmerPassesThrough = true;
+
+            int[] info = ModApi.GetSpriteInfo(PetInstance);
+            PetInstance.Sprite = new AnimatedSprite(ModEntry.GetSkin(PetType, SkinID).AssetKey, info[0], info[1], info[2]);
 
             // Put that thing where it belongs
             Game1.warpCharacter(PetInstance, Marnies, CreationLocation);
@@ -58,14 +58,6 @@ namespace AdoptSkin.Framework
                 ModEntry.SMonitor.Log(message, LogLevel.Debug);
                 Game1.chatBox.addInfoMessage(message);
             }
-        }
-
-
-        internal static bool IsStray(Pet pet)
-        {
-            if (pet.Manners == StrayID)
-                return true;
-            return false;
         }
 
 

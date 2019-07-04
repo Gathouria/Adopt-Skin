@@ -49,12 +49,13 @@
     <Compile Include="Framework\CreationHandler.cs" />
     <Compile Include="Framework\ModApi.cs" />
     <Compile Include="Framework\BFAV226Integrator.cs" />
+    <Compile Include="Framework\HoverBox.cs" />
     <Compile Include="ModConfig.cs" />
-    <Compile Include="ModEntry.cs" />
     <Compile Include="Framework\Stray.cs" />
+    <Compile Include="ModEntry.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Framework\WildHorse.cs" />
-    <Compile Include="SaveLoadHandler.cs" />
+    <Compile Include="Framework\SaveLoadHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="manifest.json" />

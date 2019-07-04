@@ -59,11 +59,10 @@ namespace AdoptSkin.Framework
         {
             // Make the luck bonus into a percentage for our use
             int luckBonus = (int)(Game1.dailyLuck * 100);
-
             // Luck affect has been turned off in the Config
             if (!ModEntry.Config.ChanceAffectedByLuck)
                 luckBonus = 0;
-            ModEntry.SMonitor.Log($"First pet received?: {FirstPetReceived}", LogLevel.Info);
+
             // Check chances for Stray and WildHorse to spawn, add creation to update loop if spawn should occur
             if (ModEntry.Config.StraySpawn && FirstPetReceived && Randomizer.Next(0, 100) - luckBonus < StrayChance)
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceStray;
@@ -71,7 +70,8 @@ namespace AdoptSkin.Framework
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceWildHorse;
 
             // Spread out pets from around water dish
-            RainyWeatherPetSet();
+            if (IsWeatherBad())
+                BadWeatherPetSpawn();
             ModEntry.SHelper.Events.Player.Warped += this.SpreadPets;
         }
 
@@ -118,78 +118,76 @@ namespace AdoptSkin.Framework
 
         internal void SpreadPets(object sender, WarpedEventArgs e)
         {
-            List<Pet> pets = ModEntry.GetPets().ToList();
+            List<Pet> pets = ModApi.GetPets().ToList();
 
-            // Ensure Stray isn't moved by vanilla
+            // Ensure Stray isn't moved around by vanilla
             ModEntry.Creator.MoveStrayToSpawn();
 
             // No pets are on the farm
             if (pets.Count == 0)
                 return;
 
-            // If weather is poor, warp pets inside FarmHouse on return to FarmHouse or Farm
+
             if ((e.NewLocation is Farm || e.NewLocation is FarmHouse) && (Game1.isRaining || Game1.isLightning || Game1.isSnowing))
             {
-                RainyWeatherPetSet();
+                BadWeatherPetSpawn();
                 return;
             }
-            // Only care about on return to farm after this point
-            else if (!(e.NewLocation is Farm))
-                return;
-
-            // Find area to warp pets to
-            Farm farm = Game1.getFarm();
-            int initX = (int)pets[0].getTileLocation().X;
-            int initY = (int)pets[0].getTileLocation().Y;
-            List<Vector2> warpableTiles = new List<Vector2>();
-            int cer = ModEntry.Config.CuddleExplosionRadius;
-
-            // Collect a set of potential tiles to warp a pet to
-            for (int i = -cer; i < cer; i++)
+            else if (e.NewLocation is Farm)
             {
-                for (int j = -cer; j < cer; j++)
+                // Find area to warp pets to
+                Farm farm = Game1.getFarm();
+                int initX = (int)pets[0].getTileLocation().X;
+                int initY = (int)pets[0].getTileLocation().Y;
+                List<Vector2> warpableTiles = new List<Vector2>();
+                int cer = ModEntry.Config.CuddleExplosionRadius;
+
+                // Collect a set of potential tiles to warp a pet to
+                for (int i = -cer; i < cer; i++)
                 {
-                    int warpX = initX + i;
-                    int warpY = initY + j;
-                    if (warpX < 0)
-                        warpX = 0;
-                    if (warpY < 0)
-                        warpY = 0;
+                    for (int j = -cer; j < cer; j++)
+                    {
+                        int warpX = initX + i;
+                        int warpY = initY + j;
+                        if (warpX < 0)
+                            warpX = 0;
+                        if (warpY < 0)
+                            warpY = 0;
 
-                    Vector2 tile = new Vector2(warpX, warpY);
-                    if (IsTileAccessible(farm, tile))
-                        warpableTiles.Add(tile);
-                }
-            }
-
-            // Can't warp in the range specified in the Config
-            if (warpableTiles.Count == 0)
-            {
-                ModEntry.SMonitor.Log($"Pets cannot be spread within the given radius: {cer}", LogLevel.Error);
-                return;
-            }
-
-            // Warp pets
-            foreach (Pet pet in ModEntry.GetPets())
-                if (ModEntry.IsInDatabase(pet))
-                {
-                    Vector2 ranTile = warpableTiles[Randomizer.Next(0, warpableTiles.Count)];
-                    Game1.warpCharacter(pet, farm, ranTile);
+                        Vector2 tile = new Vector2(warpX, warpY);
+                        if (IsTileAccessible(farm, tile))
+                            warpableTiles.Add(tile);
+                    }
                 }
 
+                // No placeable tiles found within the range given in the Config
+                if (warpableTiles.Count == 0)
+                {
+                    ModEntry.SMonitor.Log($"Pets cannot be spread within the given radius: {cer}", LogLevel.Error);
+                    return;
+                }
+
+                // Pet spread
+                foreach (Pet pet in ModApi.GetPets())
+                    if (ModApi.IsInDatabase(pet))
+                    {
+                        Vector2 ranTile = warpableTiles[Randomizer.Next(0, warpableTiles.Count)];
+                        Game1.warpCharacter(pet, farm, ranTile);
+                    }
+            }
         }
 
 
-        internal void RainyWeatherPetSet()
+        /// <summary>Spawns all owned pets into the FarmHouse</summary>
+        internal void BadWeatherPetSpawn()
         {
-            if (!Game1.isRaining && !Game1.isLightning && !Game1.isSnowing)
-                return;
-
-            foreach (Pet pet in ModEntry.GetPets())
-                if (!Stray.IsStray(pet))
+            foreach (Pet pet in ModApi.GetPets())
+                if (!ModApi.IsStray(pet))
                     pet.warpToFarmHouse(Game1.player);
-            return;
         }
+
+
+        internal bool IsWeatherBad() { return (Game1.isRaining || Game1.isSnowing || Game1.isLightning); }
 
 
         internal static bool IsTileAccessible(GameLocation map, Vector2 tile)
@@ -218,7 +216,7 @@ namespace AdoptSkin.Framework
          *****************************/
 
         /// <summary>Places the pet bed in Marnie's</summary>
-        internal void PlaceBetBed()
+        internal void PlacePetBed()
         {
             GameLocation marnies = Game1.getLocationFromName("AnimalShop");
             TileSheet tileSheet = new xTile.Tiles.TileSheet("PetBed", marnies.map, Earth.Helper.Content.GetActualAssetKey("assets/petbed.png"), new xTile.Dimensions.Size(1, 1), new xTile.Dimensions.Size(16, 15));
@@ -226,6 +224,14 @@ namespace AdoptSkin.Framework
             Layer buildingLayer = marnies.map.GetLayer("Buildings");
             buildingLayer.Tiles[17, 15] = new StaticTile(buildingLayer, tileSheet, BlendMode.Alpha, 0);
             marnies.updateMap();
+        }
+
+
+        /// <summary>Places the pet bed in Marnie's on the next day, rather than immediately.</summary>
+        internal void PlacePetBedTomorrow(object sender, DayStartedEventArgs e)
+        {
+            PlacePetBed();
+            ModEntry.SHelper.Events.GameLoop.DayStarted -= PlacePetBedTomorrow;
         }
         
 

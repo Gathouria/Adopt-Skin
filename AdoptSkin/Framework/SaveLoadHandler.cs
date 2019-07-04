@@ -45,7 +45,7 @@ namespace AdoptSkin.Framework
         ** Setup + Load/Save Logic
         ***************************/
 
-        /// <summary>Sets up initial values needed for Adopt & Skin.</summary>
+        /// <summary>Sets up initial values needed for A&S.</summary>
         internal static void Setup(object sender, SaveLoadedEventArgs e)
         {
             ModApi.RegisterDefaultTypes();
@@ -81,9 +81,11 @@ namespace AdoptSkin.Framework
             SHelper.Events.Input.ButtonPressed += ModEntry.Creator.StrayInteractionCheck;
             SHelper.Events.Input.ButtonReleased += ModEntry.HotKeyCheck;
 
-            SHelper.Events.World.NpcListChanged += ModEntry.SaveTheHorse;
+            SHelper.Events.World.NpcListChanged += ModEntry.HorseMountedCheck;
             SHelper.Events.World.NpcListChanged += Entry.CheckForFirstPet;
             SHelper.Events.World.NpcListChanged += Entry.CheckForFirstHorse;
+
+            SHelper.Events.Display.RenderingHud += ModEntry.ToolTip.RenderHoverTooltip;
         }
 
 
@@ -95,13 +97,24 @@ namespace AdoptSkin.Framework
             SHelper.Events.Input.ButtonPressed -= ModEntry.Creator.StrayInteractionCheck;
             SHelper.Events.Input.ButtonReleased -= ModEntry.HotKeyCheck;
 
-            SHelper.Events.World.NpcListChanged -= ModEntry.SaveTheHorse;
+            SHelper.Events.World.NpcListChanged -= ModEntry.HorseMountedCheck;
 
-            // Ensure variables from other saves aren't carried over on return to title screen
+            SHelper.Events.Display.RenderingHud -= ModEntry.ToolTip.RenderHoverTooltip;
+
+            // Ensure variables don't carry-over between saves if leave to title screen
+            FlatlineAllVariables();
+        }
+
+
+        /// <summary>Clears all file-specific variables</summary>
+        internal static void FlatlineAllVariables()
+        {
             ModEntry.SkinMap = new Dictionary<long, int>();
             ModEntry.IDToCategory = new Dictionary<long, ModEntry.CreatureCategory>();
+
             ModEntry.AnimalLongToShortIDs = new Dictionary<long, int>();
             ModEntry.AnimalShortToLongIDs = new Dictionary<int, long>();
+
             ModEntry.Creator.FirstPetReceived = false;
             ModEntry.Creator.FirstHorseReceived = false;
         }
@@ -137,23 +150,25 @@ namespace AdoptSkin.Framework
             // Refresh skins via skinmap
             LoadCreatureSkins();
 
-            ModEntry.SMonitor.Log($"{string.Join("\n", ModEntry.IDToCategory)}", LogLevel.Info);
-
             // Make sure Marnie's cows put some clothes on
             foreach (GameLocation loc in Game1.locations)
             {
                 if (loc is Forest forest)
                     foreach (FarmAnimal animal in forest.marniesLivestock)
                     {
-                        if (ModEntry.AnimalAssets.Keys.Count != 0 && ModEntry.AnimalAssets[ModEntry.Sanitize(animal.type.Value)].Count != 0)
-                            animal.Sprite = new AnimatedSprite(ModEntry.GetSkinFromID(ModEntry.Sanitize(animal.type.Value),
-                                Randomizer.Next(1, ModEntry.AnimalAssets[ModEntry.Sanitize(animal.type.Value)].Count)).AssetKey, 0, 32, 32);
+                        string type = ModApi.GetInternalType(animal);
+                        if (ModApi.HasSkins(type))
+                        {
+                            int[] spriteInfo = ModApi.GetSpriteInfo(animal);
+                            AnimalSkin skin = ModEntry.GetSkin(type, Randomizer.Next(1, ModEntry.Assets[type].Count + 1));
+                            animal.Sprite = new AnimatedSprite(skin.AssetKey, spriteInfo[0], spriteInfo[1], spriteInfo[2]);
+                        }
                     }
             }
 
             // Set configuration for walk-through pets
-            foreach (Pet pet in ModEntry.GetPets())
-                if (!Stray.IsStray(pet))
+            foreach (Pet pet in ModApi.GetPets())
+                if (!ModApi.IsStray(pet))
                 {
                     if (ModEntry.Config.WalkThroughPets)
                         pet.farmerPassesThrough = true;
@@ -172,54 +187,57 @@ namespace AdoptSkin.Framework
         /// <summary>Refreshes creature information based on how much information the save file contains</summary>
         internal static void LoadCreatureSkins()
         {
-            foreach (FarmAnimal animal in ModEntry.GetAnimals())
-                if (ModEntry.IsInDatabase(animal))
-                    Entry.UpdateSkin(animal);
+            foreach (FarmAnimal animal in ModApi.GetAnimals())
+                ModEntry.UpdateSkin(animal);
 
-            foreach (Pet pet in ModEntry.GetPets())
+            foreach (Pet pet in ModApi.GetPets())
                 // Remove extra Strays left on the map
-                if (Stray.IsStray(pet))
+                if (ModApi.IsStray(pet))
                     Game1.removeThisCharacterFromAllLocations(pet);
-                else if (ModEntry.IsInDatabase(pet))
-                    Entry.UpdateSkin(pet);
+                else
+                    ModEntry.UpdateSkin(pet);
 
-            foreach (Horse horse in ModEntry.GetHorses())
+            foreach (Horse horse in ModApi.GetHorses())
                 // Remove extra WildHorses left on the map
-                if (WildHorse.IsWildHorse(horse))
-                        Game1.removeThisCharacterFromAllLocations(horse);
-                else if (ModEntry.IsInDatabase(horse))
-                    Entry.UpdateSkin(horse);
+                if (ModApi.IsWildHorse(horse))
+                    Game1.removeThisCharacterFromAllLocations(horse);
+                else
+                    ModEntry.UpdateSkin(horse);
         }
 
 
+        /// <summary>Adds creatures into the system based on the data from older versions' save files or for files new to A&S.</summary>
         internal static void LoadSkinsOldVersion()
         {
             // Load pet information stored from older version formats
             Dictionary<long, int> petSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("pet-skin-map") ?? new Dictionary<long, int>();
-            foreach (Pet pet in ModEntry.GetPets())
+            foreach (Pet pet in ModApi.GetPets())
             {
-                if (!Stray.IsStray(pet) && petSkinMap.ContainsKey(pet.Manners))
+                if (ModApi.IsStray(pet))
+                    Game1.removeThisCharacterFromAllLocations(pet);
+                else if (petSkinMap.ContainsKey(pet.Manners))
                     Entry.AddCreature(pet, petSkinMap[pet.Manners]);
-                else if (!Stray.IsStray(pet))
+                else
                     Entry.AddCreature(pet);
             }
 
 
             // Load horse information stored from older version formats
             Dictionary<long, int> horseSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("horse-skin-map") ?? new Dictionary<long, int>();
-            foreach (Horse horse in ModEntry.GetHorses())
+            foreach (Horse horse in ModApi.GetHorses())
             {
-                if (!WildHorse.IsWildHorse(horse) && ModEntry.IsNotATractor(horse) && horseSkinMap.ContainsKey(horse.Manners))
+                if (ModApi.IsWildHorse(horse))
+                    Game1.removeThisCharacterFromAllLocations(horse);
+                else if (ModApi.IsNotATractor(horse) && horseSkinMap.ContainsKey(horse.Manners))
                     Entry.AddCreature(horse, horseSkinMap[horse.Manners]);
-                else if (!WildHorse.IsWildHorse(horse) && ModEntry.IsNotATractor(horse))
+                else if (ModApi.IsNotATractor(horse))
                     Entry.AddCreature(horse);
             }
 
 
             // Load animal information stored from older version formats
             Dictionary<long, int> animalSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("animal-skin-map") ?? new Dictionary<long, int>();
-            ModEntry.SMonitor.Log($"animalSkinMap: {string.Join("\n", animalSkinMap)}", LogLevel.Warn);
-            foreach (FarmAnimal animal in ModEntry.GetAnimals())
+            foreach (FarmAnimal animal in ModApi.GetAnimals())
             {
                 if (animalSkinMap.ContainsKey(animal.myID.Value))
                     Entry.AddCreature(animal, animalSkinMap[animal.myID.Value]);
@@ -261,91 +279,50 @@ namespace AdoptSkin.Framework
             // Gather handled types
             string validTypes = string.Join(", ", ModApi.GetHandledAllTypes());
 
+            // Parse file name. Ignore if using an invalid name or file extension.
             foreach (FileInfo file in new DirectoryInfo(Path.Combine(SHelper.DirectoryPath, "assets", "skins")).EnumerateFiles())
             {
-                // Check extension of file is handled by Adopt & Skin
                 string extension = Path.GetExtension(file.Name);
-                if (!ValidExtensions.Contains(extension))
-                {
-                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid extension (extension must be one of type {string.Join(", ", ValidExtensions)})", LogLevel.Warn);
-                    continue;
-                }
-
-                // Parse file name
                 string[] nameParts = Path.GetFileNameWithoutExtension(file.Name).Split(new[] { '_' }, 2);
                 string type = ModEntry.Sanitize(nameParts[0]);
-                // Ensure creature type is handled by Adopt & Skin
-                if (!ModEntry.PetAssets.ContainsKey(type) && !ModEntry.HorseAssets.ContainsKey(type) && !ModEntry.AnimalAssets.ContainsKey(type))
-                {
-                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid naming convention (can't parse {nameParts[0]} as an animal, pet, or horse. Expected one of type: {validTypes})", LogLevel.Warn);
-                    continue;
-                }
-                // Ensure both a type and skin ID can be found in the file name
-                if (nameParts.Length != 2)
-                {
-                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name} with invalid naming convention (no skin ID found)", LogLevel.Warn);
-                    continue;
-                }
-                // Ensure the skin ID is a number
                 int skinID = 0;
-                if (nameParts.Length == 2 && !int.TryParse(nameParts[1], out skinID))
-                {
-                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid skin ID (can't parse {nameParts[1]} as a number)", LogLevel.Warn);
-                    continue;
-                }
-                // Ensure the skin ID is not 0 or negative
-                if (skinID <= 0)
-                {
-                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name}` with skin ID of less than or equal to 0. Skins must have an ID of at least 1.");
-                    continue;
-                }
 
-                // File naming is valid, add asset into system
-                string assetKey = SHelper.Content.GetActualAssetKey(Path.Combine("assets", "skins", extension.Equals("xnb") ? Path.Combine(Path.GetDirectoryName(file.Name), Path.GetFileNameWithoutExtension(file.Name)) : file.Name));
-                if (ModEntry.AnimalAssets.ContainsKey(type))
-                    ModEntry.AnimalAssets[type].Add(new AnimalSkin(type, skinID, assetKey));
-                else if (ModEntry.HorseAssets.ContainsKey(type))
-                    ModEntry.HorseAssets[type].Add(new AnimalSkin(type, skinID, assetKey));
+                if (!ValidExtensions.Contains(extension))
+                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid extension (extension must be one of type {string.Join(", ", ValidExtensions)})", LogLevel.Warn);
+                else if (!ModEntry.Assets.ContainsKey(type))
+                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid naming convention (can't parse {nameParts[0]} as an animal, pet, or horse. Expected one of type: {validTypes})", LogLevel.Warn);
+                else if (nameParts.Length != 2)
+                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name} with invalid naming convention (no skin ID found)", LogLevel.Warn);
+                else if (nameParts.Length == 2 && !int.TryParse(nameParts[1], out skinID))
+                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name}` with invalid skin ID (can't parse {nameParts[1]} as a number)", LogLevel.Warn);
+                else if (skinID <= 0)
+                    ModEntry.SMonitor.Log($"Ignored skin `assets/skins/{file.Name}` with skin ID of less than or equal to 0. Skins must have an ID of at least 1.", LogLevel.Warn);
                 else
-                    ModEntry.PetAssets[type].Add(new AnimalSkin(type, skinID, assetKey));
+                {
+                    // File naming is valid, add asset into system
+                    string assetKey = SHelper.Content.GetActualAssetKey(Path.Combine("assets", "skins", extension.Equals("xnb") ? Path.Combine(Path.GetDirectoryName(file.Name), Path.GetFileNameWithoutExtension(file.Name)) : file.Name));
+                    ModEntry.Assets[type].Add(new AnimalSkin(type, skinID, assetKey));
+                }
             }
 
-
-            // Sort each list by ID
+            // Sort each skin list by ID
             AnimalSkin.Comparer comp = new AnimalSkin.Comparer();
-            foreach (string type in ModEntry.AnimalAssets.Keys)
-                ModEntry.AnimalAssets[type].Sort((p1, p2) => comp.Compare(p1, p2));
-            foreach (string type in ModEntry.PetAssets.Keys)
-                ModEntry.PetAssets[type].Sort((p1, p2) => comp.Compare(p1, p2));
-            foreach (string type in ModEntry.HorseAssets.Keys)
-                ModEntry.HorseAssets[type].Sort((p1, p2) => comp.Compare(p1, p2));
-
+            foreach (string type in ModEntry.Assets.Keys)
+                ModEntry.Assets[type].Sort((p1, p2) => comp.Compare(p1, p2));
+            
 
             // Print loaded assets to console
             StringBuilder summary = new StringBuilder();
             summary.AppendLine(
                 "Statistics:\n"
                 + "\n  Registered types: " + validTypes
-                + "\n  Animal Skins:"
+                + "\n  Skins:"
             );
-            foreach (KeyValuePair<string, List<AnimalSkin>> pair in ModEntry.AnimalAssets)
+            foreach (KeyValuePair<string, List<AnimalSkin>> pair in ModEntry.Assets)
             {
                 if (pair.Value.Count > 0)
                     summary.AppendLine($"    {pair.Key}: {pair.Value.Count} skins ({string.Join(", ", pair.Value.Select(p => Path.GetFileName(p.AssetKey)).OrderBy(p => p))})");
             }
-            summary.AppendLine("  Pet Skins:");
-            foreach (KeyValuePair<string, List<AnimalSkin>> pair in ModEntry.PetAssets)
-            {
-                if (pair.Value.Count > 0)
-                    summary.AppendLine($"    {pair.Key}: {pair.Value.Count} skins ({string.Join(", ", pair.Value.Select(p => Path.GetFileName(p.AssetKey)).OrderBy(p => p))})");
-            }
-            summary.AppendLine("  Horse Skins:");
-            foreach (KeyValuePair<string, List<AnimalSkin>> pair in ModEntry.HorseAssets)
-            {
-                if (pair.Value.Count > 0)
-                    summary.AppendLine($"    {pair.Key}: {pair.Value.Count} skins ({string.Join(", ", pair.Value.Select(p => Path.GetFileName(p.AssetKey)).OrderBy(p => p))})");
-            }
-
 
             ModEntry.SMonitor.Log(summary.ToString(), LogLevel.Trace);
             ModEntry.AssetsLoaded = true;

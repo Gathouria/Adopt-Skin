@@ -38,21 +38,19 @@ namespace AdoptSkin.Framework
         internal WildHorse()
         {
             // Create WildHorse traits
-            SkinID = Randomizer.Next(1, ModEntry.HorseAssets["horse"].Count + 1);
-            string mapName = SpawningMaps[Randomizer.Next(0, SpawningMaps.Count)];
-            Map = Game1.getLocationFromName(mapName);
+            SkinID = Randomizer.Next(1, ModEntry.Assets[ModEntry.Sanitize(typeof(Horse).Name)].Count + 1);
+            Map = Game1.getLocationFromName(SpawningMaps[Randomizer.Next(0, SpawningMaps.Count)]);
             Tile = GetRandomSpawnLocation(Map);
 
             // Create Horse instance
             HorseInstance = new Horse(new Guid(), (int)Tile.X, (int)Tile.Y)
             {
-                Sprite = new AnimatedSprite(ModEntry.GetSkinFromID("horse", SkinID).AssetKey, 7, 32, 32),
-
-                // Temporary WildHorse traits
                 Manners = WildID,
                 Name = "Wild horse",
                 displayName = "Wild horse"
             };
+            int[] info = ModApi.GetSpriteInfo(HorseInstance);
+            HorseInstance.Sprite = new AnimatedSprite(ModEntry.GetSkin(ModEntry.Sanitize(typeof(Horse).Name), SkinID).AssetKey, info[0], info[1], info[2]);
 
             // Put that thing where it belongs
             Game1.warpCharacter(HorseInstance, Map, Tile);
@@ -63,14 +61,6 @@ namespace AdoptSkin.Framework
                 ModEntry.SMonitor.Log(message, LogLevel.Debug);
                 Game1.chatBox.addInfoMessage(message);
             }
-        }
-
-        
-        internal static bool IsWildHorse(Horse horse)
-        {
-            if (horse.Manners == WildID)
-                return true;
-            return false;
         }
 
 
