@@ -38,7 +38,7 @@ namespace AdoptSkin.Framework
         internal WildHorse()
         {
             // Create WildHorse traits
-            SkinID = Randomizer.Next(1, ModEntry.Assets[ModEntry.Sanitize(typeof(Horse).Name)].Count + 1);
+            SkinID = ModEntry.GetRandomSkin(ModEntry.Sanitize(typeof(Horse).Name));
             Map = Game1.getLocationFromName(SpawningMaps[Randomizer.Next(0, SpawningMaps.Count)]);
             Tile = GetRandomSpawnLocation(Map);
 

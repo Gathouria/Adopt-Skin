@@ -77,8 +77,7 @@ namespace AdoptSkin.Framework
         internal static void StartUpdateChecks()
         {
             SHelper.Events.GameLoop.UpdateTicked += Entry.OnUpdateTicked;
-            SHelper.Events.Input.ButtonPressed += ModEntry.Creator.WildHorseInteractionCheck;
-            SHelper.Events.Input.ButtonPressed += ModEntry.Creator.StrayInteractionCheck;
+            SHelper.Events.Input.ButtonReleased += ModEntry.Creator.AdoptableInteractionCheck;
             SHelper.Events.Input.ButtonReleased += ModEntry.HotKeyCheck;
 
             SHelper.Events.World.NpcListChanged += ModEntry.HorseMountedCheck;
@@ -93,8 +92,7 @@ namespace AdoptSkin.Framework
         internal static void StopUpdateChecks(object s, EventArgs e)
         {
             SHelper.Events.GameLoop.UpdateTicked -= Entry.OnUpdateTicked;
-            SHelper.Events.Input.ButtonPressed -= ModEntry.Creator.WildHorseInteractionCheck;
-            SHelper.Events.Input.ButtonPressed -= ModEntry.Creator.StrayInteractionCheck;
+            SHelper.Events.Input.ButtonReleased -= ModEntry.Creator.AdoptableInteractionCheck;
             SHelper.Events.Input.ButtonReleased -= ModEntry.HotKeyCheck;
 
             SHelper.Events.World.NpcListChanged -= ModEntry.HorseMountedCheck;
@@ -160,7 +158,7 @@ namespace AdoptSkin.Framework
                         if (ModApi.HasSkins(type))
                         {
                             int[] spriteInfo = ModApi.GetSpriteInfo(animal);
-                            AnimalSkin skin = ModEntry.GetSkin(type, Randomizer.Next(1, ModEntry.Assets[type].Count + 1));
+                            AnimalSkin skin = ModEntry.GetSkin(type, ModEntry.GetRandomSkin(type));
                             animal.Sprite = new AnimatedSprite(skin.AssetKey, spriteInfo[0], spriteInfo[1], spriteInfo[2]);
                         }
                     }
@@ -201,7 +199,7 @@ namespace AdoptSkin.Framework
                 // Remove extra WildHorses left on the map
                 if (ModApi.IsWildHorse(horse))
                     Game1.removeThisCharacterFromAllLocations(horse);
-                else
+                else if (ModApi.IsNotATractor(horse))
                     ModEntry.UpdateSkin(horse);
         }
 
@@ -209,6 +207,11 @@ namespace AdoptSkin.Framework
         /// <summary>Adds creatures into the system based on the data from older versions' save files or for files new to A&S.</summary>
         internal static void LoadSkinsOldVersion()
         {
+            if (ModEntry.SkinMap != null && ModEntry.SkinMap.Count != 0)
+                return;
+
+            Dictionary<Character, int> creaturesToAdd = new Dictionary<Character, int>();
+
             // Load pet information stored from older version formats
             Dictionary<long, int> petSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("pet-skin-map") ?? new Dictionary<long, int>();
             foreach (Pet pet in ModApi.GetPets())
@@ -216,11 +219,12 @@ namespace AdoptSkin.Framework
                 if (ModApi.IsStray(pet))
                     Game1.removeThisCharacterFromAllLocations(pet);
                 else if (petSkinMap.ContainsKey(pet.Manners))
-                    Entry.AddCreature(pet, petSkinMap[pet.Manners]);
+                    creaturesToAdd.Add(pet, petSkinMap[pet.Manners]);
                 else
-                    Entry.AddCreature(pet);
+                    creaturesToAdd.Add(pet, 0);
+                // Reset any previous known ShortID
+                pet.Manners = 0;
             }
-
 
             // Load horse information stored from older version formats
             Dictionary<long, int> horseSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("horse-skin-map") ?? new Dictionary<long, int>();
@@ -229,14 +233,17 @@ namespace AdoptSkin.Framework
                 if (ModApi.IsWildHorse(horse))
                     Game1.removeThisCharacterFromAllLocations(horse);
                 else if (ModApi.IsNotATractor(horse) && horseSkinMap.ContainsKey(horse.Manners))
-                    Entry.AddCreature(horse, horseSkinMap[horse.Manners]);
+                    creaturesToAdd.Add(horse, horseSkinMap[horse.Manners]);
                 else if (ModApi.IsNotATractor(horse))
-                    Entry.AddCreature(horse);
+                    creaturesToAdd.Add(horse, 0);
+                // Reset any previous known ShortID
+                horse.Manners = 0;
             }
-
 
             // Load animal information stored from older version formats
             Dictionary<long, int> animalSkinMap = SHelper.Data.ReadSaveData<Dictionary<long, int>>("animal-skin-map") ?? new Dictionary<long, int>();
+            ModEntry.AnimalLongToShortIDs = new Dictionary<long, int>();
+            ModEntry.AnimalShortToLongIDs = new Dictionary<int, long>();
             foreach (FarmAnimal animal in ModApi.GetAnimals())
             {
                 if (animalSkinMap.ContainsKey(animal.myID.Value))
@@ -244,6 +251,10 @@ namespace AdoptSkin.Framework
                 else
                     Entry.AddCreature(animal);
             }
+
+
+            foreach (KeyValuePair<Character, int> creatureInfo in creaturesToAdd)
+                Entry.AddCreature(creatureInfo.Key, creatureInfo.Value);
         }
 
 
@@ -252,9 +263,6 @@ namespace AdoptSkin.Framework
             // Only allow the host player to save Adopt & Skin data
             if (!Context.IsMainPlayer)
                 return;
-
-            // Remove Adopt & Skin from update loop
-            StopUpdateChecks(null, null);
 
             // Save skin and category maps
             SHelper.Data.WriteSaveData("skin-map", ModEntry.SkinMap);
@@ -270,6 +278,9 @@ namespace AdoptSkin.Framework
 
             // Save data version. May be used for reverse-compatibility for files.
             SHelper.Data.WriteSaveData("data-version", "4");
+
+            // Remove Adopt & Skin from update loop
+            StopUpdateChecks(null, null);
         }
 
 
@@ -301,15 +312,15 @@ namespace AdoptSkin.Framework
                 {
                     // File naming is valid, add asset into system
                     string assetKey = SHelper.Content.GetActualAssetKey(Path.Combine("assets", "skins", extension.Equals("xnb") ? Path.Combine(Path.GetDirectoryName(file.Name), Path.GetFileNameWithoutExtension(file.Name)) : file.Name));
-                    ModEntry.Assets[type].Add(new AnimalSkin(type, skinID, assetKey));
+                    ModEntry.Assets[type].Add(skinID, new AnimalSkin(type, skinID, assetKey));
                 }
             }
-
+            /*
             // Sort each skin list by ID
             AnimalSkin.Comparer comp = new AnimalSkin.Comparer();
             foreach (string type in ModEntry.Assets.Keys)
-                ModEntry.Assets[type].Sort((p1, p2) => comp.Compare(p1, p2));
-            
+                ModEntry.Assets[type]
+            */
 
             // Print loaded assets to console
             StringBuilder summary = new StringBuilder();
@@ -318,10 +329,10 @@ namespace AdoptSkin.Framework
                 + "\n  Registered types: " + validTypes
                 + "\n  Skins:"
             );
-            foreach (KeyValuePair<string, List<AnimalSkin>> pair in ModEntry.Assets)
+            foreach (KeyValuePair<string, Dictionary<int, AnimalSkin>> skinEntry in ModEntry.Assets)
             {
-                if (pair.Value.Count > 0)
-                    summary.AppendLine($"    {pair.Key}: {pair.Value.Count} skins ({string.Join(", ", pair.Value.Select(p => Path.GetFileName(p.AssetKey)).OrderBy(p => p))})");
+                if (skinEntry.Value.Count > 0)
+                    summary.AppendLine($"    {skinEntry.Key}: {skinEntry.Value.Count} skins ({string.Join(", ", skinEntry.Value.Select(p => Path.GetFileName(p.Value.AssetKey)).OrderBy(p => p))})");
             }
 
             ModEntry.SMonitor.Log(summary.ToString(), LogLevel.Trace);

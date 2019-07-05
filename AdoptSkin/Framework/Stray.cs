@@ -37,7 +37,7 @@ namespace AdoptSkin.Framework
         {
             // Create Stray traits
             PetType = ModEntry.PetTypeMap.Keys.ToList()[Randomizer.Next(0, ModEntry.PetTypeMap.Count)];
-            SkinID = Randomizer.Next(1, ModEntry.Assets[PetType].Count + 1);
+            SkinID = ModEntry.GetRandomSkin(PetType);
 
             // Create Pet instance
             PetInstance = (Pet)Activator.CreateInstance(ModEntry.PetTypeMap[PetType], (int)CreationLocation.X, (int)CreationLocation.Y);

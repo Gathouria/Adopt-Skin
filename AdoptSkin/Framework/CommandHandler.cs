@@ -151,40 +151,19 @@ namespace AdoptSkin.Framework
                     return;
 
 
-                // Expected arguments: <animal/pet/horse> <creature ID>
+                // Expected arguments: <creature ID>
                 case "debug_find":
                     // Enforce argument constraints
-                    if (!EnforceArgCount(args, 2) ||
-                        !EnforceArgTypeCategory(args[0], 1) ||
-                        !EnforceArgTypeInt(args[1], 2))
+                    if (!EnforceArgCount(args, 1) ||
+                        !EnforceArgTypeInt(args[0], 1))
                         return;
 
-                    string cat = ModEntry.Sanitize(args[0]);
-                    int id = int.Parse(args[1]);
-
-                    switch (cat)
-                    {
-                        case "horse":
-                            foreach (Horse horse in ModApi.GetHorses())
-                                if (horse.Manners == id)
-                                    ModEntry.SMonitor.Log($"{horse.Name} located at: {horse.currentLocation} | {horse.getTileX()}, {horse.getTileY()}", LogLevel.Alert);
-                            return;
-
-                        case "pet":
-                            foreach (Pet pet in ModApi.GetPets())
-                                if (pet.Manners == id)
-                                    ModEntry.SMonitor.Log($"{pet.Name} located at: {pet.currentLocation} | {pet.getTileX()}, {pet.getTileY()}", LogLevel.Alert);
-                            return;
-
-                        case "animal":
-                            foreach (FarmAnimal animal in ModApi.GetAnimals())
-                                if (ModEntry.AnimalLongToShortIDs[animal.myID.Value] == id)
-                                    ModEntry.SMonitor.Log($"{animal.Name} located at: {animal.currentLocation} | {animal.getTileX()}, {animal.getTileY()}", LogLevel.Alert);
-                            return;
-
-                        default:
-                            return;
-                    }
+                    Character creatureToFind = ModEntry.GetCreatureFromShortID(int.Parse(args[0]));
+                    if (creatureToFind != null)
+                        ModEntry.SMonitor.Log($"{creatureToFind.Name} located at: {creatureToFind.currentLocation} | {creatureToFind.getTileX()}, {creatureToFind.getTileY()}", LogLevel.Info);
+                    else
+                        ModEntry.SMonitor.Log($"No creature exists with the given ID: {args[0]}", LogLevel.Error);
+                    return;
 
 
                 case "horse_whistle":
@@ -223,7 +202,7 @@ namespace AdoptSkin.Framework
                         !EnforceArgTypeInt(args[0], 1))
                         return;
 
-                    Character sellCreature = ModEntry.GetCreatureFromShortID(int.Parse(args[1]));
+                    Character sellCreature = ModEntry.GetCreatureFromShortID(int.Parse(args[0]));
                     if (sellCreature == null)
                     {
                         ModEntry.SMonitor.Log($"No creature exists with the given ID: {args[0]}", LogLevel.Error);
@@ -282,7 +261,7 @@ namespace AdoptSkin.Framework
                 case "randomize_skin":
                     // Enforce argument constraints
                     if (!EnforceArgCount(args, 1) ||
-                        !EnforceArgTypeInt(args[1], 1))
+                        !EnforceArgTypeInt(args[0], 1))
                         return;
 
                     // Find associated creature instance
@@ -302,7 +281,7 @@ namespace AdoptSkin.Framework
                     return;
 
 
-                // Expected arguments: <skin ID>, <creature category>, <creature ID>
+                // Expected arguments: <skin ID>, <creature ID>
                 case "set_skin":
                     // Enforce argument constraints
                     if (!EnforceArgCount(args, 2) ||
@@ -314,24 +293,22 @@ namespace AdoptSkin.Framework
                     int shortID = int.Parse(args[1]);
                     Character creatureToSkin = ModEntry.GetCreatureFromShortID(shortID);
 
-                    if (creatureToSkin == null && !ModApi.IsInDatabase(creatureToSkin))
+                    if (creatureToSkin == null)
                     {
                         ModEntry.SMonitor.Log($"No creature is registered with the given ID: {shortID}", LogLevel.Error);
                         return;
                     }
 
                     // Enforce argument range to the range of the available skins for this creature's type
-                    if (!EnforceArgRange(skinID, ModEntry.Assets[ModApi.GetInternalType(creatureToSkin)].Count, 2))
+                    if (!ModEntry.Assets[ModApi.GetInternalType(creatureToSkin)].ContainsKey(skinID))
+                    {
+                        ModEntry.SMonitor.Log($"{creatureToSkin.Name}'s type {ModApi.GetInternalType(creatureToSkin)} has no skin with ID {skinID}");
                         return;
+                    }
 
                     // Successfully found given creature to set skin for
-                    if (creatureToSkin != null)
-                    {
-                        ModEntry.SetSkin(creatureToSkin, skinID);
-                        ModEntry.SMonitor.Log($"{creatureToSkin.Name}'s skin has been set to skin {skinID}", LogLevel.Alert);
-                    }
-                    else
-                        ModEntry.SMonitor.Log($"Skin setting error. Creature with ID {shortID} could not be given skin {skinID}", LogLevel.Error);
+                    ModEntry.SetSkin(creatureToSkin, skinID);
+                    ModEntry.SMonitor.Log($"{creatureToSkin.Name}'s skin has been set to skin {skinID}", LogLevel.Alert);
                     return;
 
 

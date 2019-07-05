@@ -92,7 +92,6 @@ namespace AdoptSkin.Framework
         {
             if (!Game1.hasLoadedGame || !ModEntry.AssetsLoaded)
                 return;
-            ModEntry.SMonitor.Log("Placing Stray", LogLevel.Info);
             StrayInfo = new Stray();
             ModEntry.SHelper.Events.GameLoop.UpdateTicked -= this.PlaceStray;
         }
@@ -163,7 +162,7 @@ namespace AdoptSkin.Framework
                 // No placeable tiles found within the range given in the Config
                 if (warpableTiles.Count == 0)
                 {
-                    ModEntry.SMonitor.Log($"Pets cannot be spread within the given radius: {cer}", LogLevel.Error);
+                    ModEntry.SMonitor.Log($"Pets cannot be spread within the given radius: {cer}", LogLevel.Alert);
                     return;
                 }
 
@@ -207,6 +206,64 @@ namespace AdoptSkin.Framework
         }
 
 
+        /// <summary>Returns true if the given X and Y coordinates are overlapped with the given Pet or Horse</summary>
+        internal bool IsOverPetOrHorse(int mouseX, int mouseY, NPC petOrHorse)
+        {
+            return (mouseX >= petOrHorse.getLeftMostTileX().X && mouseX <= petOrHorse.getRightMostTileX().X &&
+                    mouseY >= petOrHorse.getTileY() - 1 && mouseY <= petOrHorse.getTileY() + 1);
+        }
+
+
+        /// <summary>Check to see if the player is attempting to interact with a Stray or WildHorse</summary>
+        internal void AdoptableInteractionCheck(object sender, ButtonReleasedEventArgs e)
+        {
+            if (StrayInfo != null)
+            {
+                // Check for mouse and controller versions of interaction
+                if ((e.Button.Equals(SButton.MouseRight) && IsOverPetOrHorse((int)e.Cursor.Tile.X, (int)e.Cursor.Tile.Y, StrayInfo.PetInstance) && StrayInfo.PetInstance.withinPlayerThreshold(3))   ||
+                    (e.Button.Equals(SButton.ControllerA) && StrayInfo.PetInstance.withinPlayerThreshold(1)))
+                {
+                    Game1.activeClickableMenu = new ConfirmationDialog("This is one of the strays that Marnie has taken in. \n\n" +
+                        $"The animal is wary, but curious. Will you adopt this {ModEntry.Sanitize(StrayInfo.PetInstance.GetType().Name)} for {AdoptPrice}G?", (who) =>
+                        {
+                            if (Game1.activeClickableMenu is StardewValley.Menus.ConfirmationDialog cd)
+                                cd.cancel();
+
+                            if (Game1.player.Money >= AdoptPrice)
+                            {
+                                Game1.player.Money -= AdoptPrice;
+                                Game1.activeClickableMenu = new NamingMenu(PetNamer, $"What will you name it?");
+                            }
+                            else
+                            {
+                                // Exit the naming menu
+                                Game1.drawObjectDialogue($"You don't have {AdoptPrice}G..");
+                            }
+                        });
+                }
+            }
+            if (HorseInfo != null)
+            {
+                // Check for mouse and controller versions of interaction
+                if ((e.Button.Equals(SButton.MouseRight) && IsOverPetOrHorse((int)e.Cursor.Tile.X, (int)e.Cursor.Tile.Y, HorseInfo.HorseInstance) && HorseInfo.HorseInstance.withinPlayerThreshold(3)) ||
+                    (e.Button.Equals(SButton.ControllerA) && HorseInfo.HorseInstance.withinPlayerThreshold(1)))
+                {
+                    Game1.activeClickableMenu = new ConfirmationDialog("This appears to be an escaped horse from a neighboring town. \n\nIt looks tired, but friendly. Will you adopt this horse?", (who) =>
+                    {
+                        if (Game1.activeClickableMenu is StardewValley.Menus.ConfirmationDialog cd)
+                            cd.cancel();
+
+                        Game1.activeClickableMenu = new NamingMenu(HorseNamer, "What will you name this horse?");
+                    }, (who) =>
+                    {
+                        // Exit the naming menu
+                        Game1.drawObjectDialogue($"You leave the creature to rest for now. It's got a big, bright world ahead of it.");
+                    });
+                }
+            }
+        }
+
+
 
 
 
@@ -234,39 +291,6 @@ namespace AdoptSkin.Framework
             ModEntry.SHelper.Events.GameLoop.DayStarted -= PlacePetBedTomorrow;
         }
         
-
-        /// <summary>Check to see if the player is attempting to interact with the stray</summary>
-        internal void StrayInteractionCheck(object sender, ButtonPressedEventArgs e)
-        {
-            if (StrayInfo != null &&
-                e.Button.Equals(SButton.MouseRight) &&
-                StrayInfo.PetInstance.withinPlayerThreshold(3))
-            {
-                if ((int)e.Cursor.Tile.X >= StrayInfo.PetInstance.getLeftMostTileX().X && (int)e.Cursor.Tile.X <= StrayInfo.PetInstance.getRightMostTileX().X &&
-                    (int)e.Cursor.Tile.Y >= StrayInfo.PetInstance.getTileY() - 1 && (int)e.Cursor.Tile.Y <= StrayInfo.PetInstance.getTileY() + 1)
-                {
-
-                    Game1.activeClickableMenu = new ConfirmationDialog("This is one of the strays that Marnie has taken in. \n\n" +
-                        $"The animal is wary, but curious. Will you adopt this {ModEntry.Sanitize(StrayInfo.PetInstance.GetType().Name)} for {AdoptPrice}G?", (who) =>
-                    {
-                        if (Game1.activeClickableMenu is StardewValley.Menus.ConfirmationDialog cd)
-                            cd.cancel();
-
-                        if (Game1.player.Money >= AdoptPrice)
-                        {
-                            Game1.player.Money -= AdoptPrice;
-                            Game1.activeClickableMenu = new NamingMenu(PetNamer, $"What will you name it?");
-                        }
-                        else
-                        {
-                            // Exit the naming menu
-                            Game1.drawObjectDialogue($"You don't have {AdoptPrice}G..");
-                        }
-                    });
-                }
-            }
-        }
-
 
         /// <summary>Adopts and names the stray being interacted with. Called in the CheckStray event handler.</summary>
         internal void PetNamer(string petName)
@@ -298,33 +322,6 @@ namespace AdoptSkin.Framework
         /*********************************
          ** H O R S E   A D O P T I O N **
          *********************************/
-
-        /// <summary>Check to see if the player is attempting to interact with the wild horse</summary>
-        internal void WildHorseInteractionCheck(object sender, ButtonPressedEventArgs e)
-        {
-            if (HorseInfo != null && 
-                e.Button.Equals(SButton.MouseRight) &&
-                HorseInfo.HorseInstance.withinPlayerThreshold(3))
-            {
-                if ((int)e.Cursor.Tile.X >= HorseInfo.HorseInstance.getLeftMostTileX().X && (int)e.Cursor.Tile.X <= HorseInfo.HorseInstance.getRightMostTileX().X &&
-                    (int)e.Cursor.Tile.Y >= HorseInfo.HorseInstance.getTileY() - 1 && (int)e.Cursor.Tile.Y <= HorseInfo.HorseInstance.getTileY() + 1)
-                {
-
-                    Game1.activeClickableMenu = new ConfirmationDialog("This appears to be an escaped horse from a neighboring town. \n\nIt looks tired, but friendly. Will you adopt this horse?", (who) =>
-                    {
-                        if (Game1.activeClickableMenu is StardewValley.Menus.ConfirmationDialog cd)
-                            cd.cancel();
-
-                        Game1.activeClickableMenu = new NamingMenu(HorseNamer, "What will you name this horse?");
-                    }, (who) =>
-                    {
-                        // Exit the naming menu
-                        Game1.drawObjectDialogue($"You leave the creature to rest for now. It's got a big, bright world ahead of it.");
-                    });
-                }
-            }
-        }
-
 
         /// <summary>Adopts and names the wild horse being interacted with. Called in the CheckHorse event handler.</summary>
         internal void HorseNamer(string horseName)

@@ -71,7 +71,7 @@ namespace AdoptSkin.Framework
             }
 
             // Create an entry for assets to be added in ModEntry
-            ModEntry.Assets.Add(id, new List<AnimalSkin>());
+            ModEntry.Assets.Add(id, new Dictionary<int, AnimalSkin>());
         }
 
         /// <summary>Registers Stardew Valley's default animal and pet types for skin support.</summary>

@@ -19,6 +19,15 @@ using StardewValley.Buildings;
 
 namespace AdoptSkin
 {
+
+    // ** The TODO List **
+    // 
+    // - Add support for custom animal types (Ento added an ExtraTypes to the Config, look there)
+    // - Randomize_skins >> Work as list_creatures does, use variables
+    // - Figure out pet spawn before moving maps (check to see if pet is already on map? Will this cause cuddle puddle?)
+    // - Make strays/horses controller interactable
+    //
+
     public class ModEntry : Mod, IAssetEditor
     {
         /************************
@@ -58,7 +67,7 @@ namespace AdoptSkin
         internal static BFAV300Integrator BFAV300Worker;
 
         // Skin assets
-        internal static Dictionary<string, List<AnimalSkin>> Assets = new Dictionary<string, List<AnimalSkin>>();
+        internal static Dictionary<string, Dictionary<int, AnimalSkin>> Assets = new Dictionary<string, Dictionary<int, AnimalSkin>>();
 
         // Skin map
         internal static Dictionary<long, int> SkinMap = new Dictionary<long, int>();
@@ -77,8 +86,6 @@ namespace AdoptSkin
         internal static List<Horse> BeingRidden = new List<Horse>();
         // Last known FarmAnimal count
         internal static int AnimalCount = 0;
-        // Test to display on tooltip for Pet or Horse, if any
-        internal static string HoverText;
 
         internal static bool AssetsLoaded = false;
 
@@ -128,13 +135,12 @@ namespace AdoptSkin
             // DEBUG
             if (Config.DebuggingMode)
             {
-                // ** TODO: Make debug commands line up with the lack of a need to call categories anymore
                 helper.ConsoleCommands.Add("debug_reset", "DEBUG: ** WARNING ** Resets all skins and creature IDs, but ensures that all creatures are properly in the Adopt & Skin system.", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_skinmaps", "DEBUG: Prints all info in current skin maps", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_idmaps", "DEBUG: Prints AnimalLongToShortIDs", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_pets", "DEBUG: Print the information for every Pet instance on the map", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_horses", "DEBUG: Print the information for every Horse instance on the map", Commander.OnCommandReceived);
-                helper.ConsoleCommands.Add("debug_find", "DEBUG: Locate the creature with the given ID. Call `debug_find <horse/pet/animal> <creature ID>`.", Commander.OnCommandReceived);
+                helper.ConsoleCommands.Add("debug_find", "DEBUG: Locate the creature with the given ID. Call `debug_find <creature ID>`.", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("summon_stray", "DEBUG: Summons a new stray at Marnie's.", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("summon_horse", "DEBUG: Summons a wild horse. Somewhere.", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_clearunowned", "DEBUG: Removes any wild horses or strays that exist, to clear out glitched extras", Commander.OnCommandReceived);
@@ -195,31 +201,58 @@ namespace AdoptSkin
             return skinID;
         }
 
-        internal static int RandomizeSkin(Character creature) { return SetSkin(creature, Randomizer.Next(1, Assets[ModApi.GetInternalType(creature)].Count + 1)); }
+        internal static int RandomizeSkin(Character creature)
+        {
+            return SetSkin(creature, GetRandomSkin(ModApi.GetInternalType(creature)));
+        }
+
+        internal static int GetRandomSkin(string type)
+        {
+            int randomLookup = Randomizer.Next(0, Assets[Sanitize(type)].Keys.Count - 1);
+            return Assets[Sanitize(type)].ElementAt(randomLookup).Key;
+        }
 
         internal static AnimalSkin GetSkin(Character creature)
         {
             if (!ModApi.HasSkins(ModApi.GetInternalType(creature)) || !ModApi.IsInDatabase(creature))
                 return null;
+                
 
             int skinID;
+            string type = ModApi.GetInternalType(creature);
+            
+            // Take care of Strays and WildHorses
             if (Creator.StrayInfo != null && ModApi.IsStray(creature))
                 skinID = Creator.StrayInfo.SkinID;
             else if (Creator.HorseInfo != null && ModApi.IsWildHorse(creature))
                 skinID = Creator.HorseInfo.SkinID;
-            else
+            // Take care of FarmAnimal subtypes
+            else if (creature is FarmAnimal animal)
+            {
                 skinID = SkinMap[GetLongID(creature)];
 
+                if (ModApi.HasBabySprite(type) && animal.age.Value < animal.ageWhenMature.Value)
+                    type = "baby" + type;
+                else if (ModApi.HasShearedSprite(type) && animal.showDifferentTextureWhenReadyForHarvest.Value && animal.currentProduce.Value <= 0)
+                    type = "sheared" + type;
+            }
+            // Take care of owned Pets and Horses
+            else
+                skinID = SkinMap[GetLongID(creature)];
+            
 
-            if (skinID > Assets[ModApi.GetInternalType(creature)].Count)
+            if (!Assets[ModApi.GetInternalType(creature)].ContainsKey(skinID))
             {
                 ModEntry.SMonitor.Log($"{creature.Name}'s skin ID no longer exists in `/assets/skins`. Skin will be randomized.", LogLevel.Alert);
                 skinID = RandomizeSkin(creature);
             }
-            return GetSkin(ModApi.GetInternalType(creature), skinID);
+            else if (skinID == 0)
+                return null;
+
+            return GetSkin(type, skinID);
         }
 
-        internal static AnimalSkin GetSkin(string type, int skinID) { return Assets[type][skinID - 1]; }
+        internal static AnimalSkin GetSkin(string type, int skinID) { return Assets[type][skinID]; }
 
 
 
@@ -254,7 +287,7 @@ namespace AdoptSkin
             else if (creature is Horse horse)
                 return horse.Manners;
             else if (creature is FarmAnimal animal)
-                return AnimalLongToShortIDs[GetLongID(creature)];
+                return AnimalLongToShortIDs[GetLongID(animal)];
             return 0;
         }
 
