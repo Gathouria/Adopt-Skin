@@ -23,10 +23,14 @@ namespace AdoptSkin
     // ** The TODO List **
     // 
     // - Add support for custom animal types (Ento added an ExtraTypes to the Config, look there)
-    // - Randomize_skins >> Work as list_creatures does, use variables
     // - Figure out pet spawn before moving maps (check to see if pet is already on map? Will this cause cuddle puddle?)
-    // - Make strays/horses controller interactable
+
     //
+    // TEST - RECENTLY ADDED:
+    // 
+    // - Strays/WildHorses are controller interactable
+    // - Skins can be named non-continuously
+    // - Randomize_skins >> Work as list_creatures does, use variables
 
     public class ModEntry : Mod, IAssetEditor
     {
@@ -125,10 +129,9 @@ namespace AdoptSkin
 
             // SMAPI Commands
             helper.ConsoleCommands.Add("list_creatures", $"Lists the creature IDs and skin IDs of the given type.\n(Options: '{string.Join("', '", CommandHandler.CreatureGroups)}', or a specific animal type (such as bluechicken))", Commander.OnCommandReceived);
-            helper.ConsoleCommands.Add("randomize_all_skins", "Randomizes the skins for every farm animal, pet, and horse on the farm.", Commander.OnCommandReceived);
-            helper.ConsoleCommands.Add("randomize_skin", "Randomizes the skin for the given creature. Call `randomize_skin <creature ID>`. To find a creature's ID, call `list_creatures`.", Commander.OnCommandReceived);
+            helper.ConsoleCommands.Add("randomize_skin", $"Randomizes the skin for the given group of creatures or the creature with the given ID. Call `randomize_skin <creature group or creature ID>`.\nCallable creature groups: {string.Join(",", CommandHandler.CreatureGroups)}, or an adult creature type\nTo find a creature's ID, call `list_creatures`.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("set_skin", "Sets the skin of the given creature to the given skin ID. Call `set_skin <skin ID> <creature ID>`. To find a creature's ID, call `list_creatures`.", Commander.OnCommandReceived);
-            helper.ConsoleCommands.Add("corral_horses", "Warp all horses to the farm's stable, giving you the honor of being a clown car chauffeur.", Commander.OnCommandReceived);
+            helper.ConsoleCommands.Add("corral_horses", "Warp all horses to the farm's stable, giving you the honor of being a professional clown car chauffeur.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("horse_whistle", "Summons one of the player's horses to them. Can be called with a horse's ID to call a specific horse. To find a horse's ID, call `list_creatures horse`.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("sell", "Used to give away one of your pets or horses. Call `sell <creature ID>`. To find a creature's ID, call `list_creatures`.", Commander.OnCommandReceived);
 
@@ -208,7 +211,7 @@ namespace AdoptSkin
 
         internal static int GetRandomSkin(string type)
         {
-            int randomLookup = Randomizer.Next(0, Assets[Sanitize(type)].Keys.Count - 1);
+            int randomLookup = Randomizer.Next(0, Assets[Sanitize(type)].Keys.Count);
             return Assets[Sanitize(type)].ElementAt(randomLookup).Key;
         }
 

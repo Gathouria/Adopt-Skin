@@ -27,6 +27,7 @@ namespace AdoptSkin.Framework
 
         /// <summary>Randomizer for logic within CreationHandler instances.</summary>
         private readonly Random Randomizer = new Random();
+        private readonly int PetWarpTileID = 1937;
 
         /// <summary>Reference to Adopt & Skin's ModEntry. Used to access creature information and print information to the monitor when necessary.</summary>
         internal ModEntry Earth;
@@ -70,9 +71,12 @@ namespace AdoptSkin.Framework
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += this.PlaceWildHorse;
 
             // Spread out pets from around water dish
-            if (IsWeatherBad())
-                BadWeatherPetSpawn();
-            ModEntry.SHelper.Events.Player.Warped += this.SpreadPets;
+            if (ModEntry.Config.DisperseCuddlePuddle)
+            {
+                if (IsWeatherBad())
+                    BadWeatherPetSpawn();
+                ModEntry.SHelper.Events.Player.Warped += this.SpreadPets;
+            }
         }
 
 

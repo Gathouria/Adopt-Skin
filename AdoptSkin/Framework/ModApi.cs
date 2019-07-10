@@ -192,9 +192,11 @@ namespace AdoptSkin.Framework
 
         /// <summary>Returns whether the given type contains the word "chicken"</summary>
         public static bool IsChicken(string type) { return ModEntry.Sanitize(type).Contains("chicken"); }
+        public static bool IsChicken(FarmAnimal animal) { return IsChicken(animal.type.Value); }
 
         /// <summary>Returns whether the given type contains the word "cow"</summary>
         public static bool IsCow(string type) { return ModEntry.Sanitize(type).Contains("cow"); }
+        public static bool IsCow(FarmAnimal animal) { return IsCow(animal.type.Value); }
 
         public static bool HasBabySprite(string type) { return ModEntry.Assets.ContainsKey("baby" + ModEntry.Sanitize(type)); }
 

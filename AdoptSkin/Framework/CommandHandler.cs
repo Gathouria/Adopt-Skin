@@ -257,27 +257,39 @@ namespace AdoptSkin.Framework
                     return;
 
 
-                // Expected arguments: <creature category>, <creature ID>
+                // Expected arguments: <creature group or creature ID>
                 case "randomize_skin":
                     // Enforce argument constraints
-                    if (!EnforceArgCount(args, 1) ||
-                        !EnforceArgTypeInt(args[0], 1))
+                    if (!EnforceArgCount(args, 1))
                         return;
 
-                    // Find associated creature instance
-                    int creatureID = int.Parse(args[0]);
-                    Character creature = ModEntry.GetCreatureFromShortID(creatureID);
-
-                    // A creature was able to be located with the given category and ID
-                    if (creature != null && ModApi.IsInDatabase(creature))
+                    string call = ModEntry.Sanitize(args[0]);
+                    if (CreatureGroups.Contains(call) || ModApi.GetHandledAllTypes().Contains(call))
                     {
-                        if (ModEntry.RandomizeSkin(creature) == 0)
-                            ModEntry.SMonitor.Log($"No skins are located in `/assets/skins` for {creature.Name}'s type: {ModEntry.Sanitize(creature.GetType().Name)}", LogLevel.Error);
-                        else
-                            ModEntry.SMonitor.Log($"{creature.Name}'s skin has been randomized.", LogLevel.Alert);
+                        List<Character> group = GetCreaturesFromGroup(call);
+                        foreach (Character creature in group)
+                        {
+                            ModEntry.RandomizeSkin(creature);
+                        }
+                        ModEntry.SMonitor.Log($"All creatures in group `{call}` have been randomized.", LogLevel.Alert);
                     }
-                    else
-                        ModEntry.SMonitor.Log($"Creature with given ID does not exist: {creatureID}", LogLevel.Error);
+                    else if (EnforceArgTypeInt(args[0], 1))
+                    {
+                        // Find associated creature instance
+                        int creatureID = int.Parse(args[0]);
+                        Character creature = ModEntry.GetCreatureFromShortID(creatureID);
+
+                        // A creature was able to be located with the given category and ID
+                        if (creature != null && ModApi.IsInDatabase(creature))
+                        {
+                            if (ModEntry.RandomizeSkin(creature) == 0)
+                                ModEntry.SMonitor.Log($"No skins are located in `/assets/skins` for {creature.Name}'s type: {ModEntry.Sanitize(creature.GetType().Name)}", LogLevel.Error);
+                            else
+                                ModEntry.SMonitor.Log($"{creature.Name}'s skin has been randomized.", LogLevel.Alert);
+                        }
+                        else
+                            ModEntry.SMonitor.Log($"Creature with given ID does not exist: {creatureID}", LogLevel.Error);
+                    }
                     return;
 
 
@@ -302,7 +314,7 @@ namespace AdoptSkin.Framework
                     // Enforce argument range to the range of the available skins for this creature's type
                     if (!ModEntry.Assets[ModApi.GetInternalType(creatureToSkin)].ContainsKey(skinID))
                     {
-                        ModEntry.SMonitor.Log($"{creatureToSkin.Name}'s type {ModApi.GetInternalType(creatureToSkin)} has no skin with ID {skinID}");
+                        ModEntry.SMonitor.Log($"{creatureToSkin.Name}'s type ({ModApi.GetInternalType(creatureToSkin)}) has no skin with ID {skinID}", LogLevel.Error);
                         return;
                     }
 
@@ -400,6 +412,92 @@ namespace AdoptSkin.Framework
             }
 
             return true;
+        }
+
+
+
+
+
+
+        /*************************
+        ** Miscellaneous Helpers
+        *************************/
+
+        /// <summary>Returns a List of Characters of all creatures of the specified creature type or custom grouping</summary>
+        internal List<Character> GetCreaturesFromGroup(string group)
+        {
+            group = ModEntry.Sanitize(group);
+            List<Character> calledGroup = new List<Character>();
+
+            if (!CreatureGroups.Contains(group) && !ModApi.GetHandledAllTypes().Contains(group))
+            {
+                ModEntry.SMonitor.Log($"Specified grouping is not handled by Adopt & Skin: {group}", LogLevel.Error);
+                return calledGroup;
+            }
+
+            // Add FarmAnimal types to the return list
+            if (group == "all" || group == "animal")
+                foreach (FarmAnimal animal in ModApi.GetAnimals())
+                {
+                    calledGroup.Add(animal);
+                }
+            else if (group == "coop")
+                foreach (FarmAnimal animal in ModApi.GetAnimals())
+                {
+                    if (animal.isCoopDweller())
+                        calledGroup.Add(animal);
+                }
+            else if (group == "barn")
+                foreach (FarmAnimal animal in ModApi.GetAnimals())
+                {
+                    if (!animal.isCoopDweller())
+                        calledGroup.Add(animal);
+                }
+            else if (group == "chicken")
+                foreach (FarmAnimal animal in ModApi.GetAnimals())
+                {
+                    if (ModApi.IsChicken(animal))
+                        calledGroup.Add(animal);
+                }
+            else if (group == "cow")
+                foreach (FarmAnimal animal in ModApi.GetAnimals())
+                {
+                    if (ModApi.IsCow(animal))
+                        calledGroup.Add(animal);
+                }
+            else if (ModApi.GetHandledAnimalTypes().Contains(group))
+                foreach (FarmAnimal animal in ModApi.GetAnimals())
+                {
+                    if (ModApi.GetInternalType(animal) == group)
+                        calledGroup.Add(animal);
+                }
+
+
+            // Add Pet types to the return list
+            if (group == "all" || group == "pet")
+                foreach (Pet pet in ModApi.GetPets())
+                {
+                    if (!ModApi.IsStray(pet))
+                        calledGroup.Add(pet);
+                }
+            else if (ModApi.GetHandledPetTypes().Contains(group))
+                foreach (Pet pet in ModApi.GetPets())
+                {
+                    if (!ModApi.IsStray(pet) && ModApi.GetInternalType(pet) == group)
+                        calledGroup.Add(pet);
+                }
+
+
+            // Add Horse types to the return list
+            if (group == "all" || ModApi.GetHandledHorseTypes().Contains(group))
+                foreach (Horse horse in ModApi.GetHorses())
+                {
+                    if (!ModApi.IsWildHorse(horse) && ModApi.IsNotATractor(horse))
+                        calledGroup.Add(horse);
+                }
+
+
+            return calledGroup;
         }
 
 
