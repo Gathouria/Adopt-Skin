@@ -587,7 +587,7 @@ namespace AdoptSkin.Framework
             }
 
 
-            // -- Handl Pet type arguments --
+            // -- Handle Pet type arguments --
             if (type == "all" || type == "pet")
             {
                 List<string> petInfo = new List<string>();

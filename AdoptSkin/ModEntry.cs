@@ -211,8 +211,12 @@ namespace AdoptSkin
 
         internal static int GetRandomSkin(string type)
         {
-            int randomLookup = Randomizer.Next(0, Assets[Sanitize(type)].Keys.Count);
-            return Assets[Sanitize(type)].ElementAt(randomLookup).Key;
+            type = Sanitize(type);
+            if (!ModApi.HasSkins(type))
+                return 0;
+
+            int randomLookup = Randomizer.Next(0, Assets[type].Keys.Count);
+            return Assets[type].ElementAt(randomLookup).Key;
         }
 
         internal static AnimalSkin GetSkin(Character creature)
@@ -255,7 +259,7 @@ namespace AdoptSkin
             return GetSkin(type, skinID);
         }
 
-        internal static AnimalSkin GetSkin(string type, int skinID) { return Assets[type][skinID]; }
+        internal static AnimalSkin GetSkin(string type, int skinID) { return Assets[Sanitize(type)][skinID]; }
 
 
 

@@ -207,9 +207,6 @@ namespace AdoptSkin.Framework
         /// <summary>Adds creatures into the system based on the data from older versions' save files or for files new to A&S.</summary>
         internal static void LoadSkinsOldVersion()
         {
-            if (ModEntry.SkinMap != null && ModEntry.SkinMap.Count != 0)
-                return;
-
             Dictionary<Character, int> creaturesToAdd = new Dictionary<Character, int>();
 
             // Load pet information stored from older version formats
@@ -217,11 +214,18 @@ namespace AdoptSkin.Framework
             foreach (Pet pet in ModApi.GetPets())
             {
                 if (ModApi.IsStray(pet))
+                {
                     Game1.removeThisCharacterFromAllLocations(pet);
-                else if (petSkinMap.ContainsKey(pet.Manners))
-                    creaturesToAdd.Add(pet, petSkinMap[pet.Manners]);
-                else
+                    continue;
+                }
+
+                long longID = ModEntry.GetLongID(pet);
+                // Pet unregistered
+                if (longID == 0)
                     creaturesToAdd.Add(pet, 0);
+                // Pet registered in previous system
+                else if (petSkinMap.ContainsKey(longID))
+                    creaturesToAdd.Add(pet, petSkinMap[longID]);
                 // Reset any previous known ShortID
                 pet.Manners = 0;
             }
@@ -231,11 +235,20 @@ namespace AdoptSkin.Framework
             foreach (Horse horse in ModApi.GetHorses())
             {
                 if (ModApi.IsWildHorse(horse))
+                {
                     Game1.removeThisCharacterFromAllLocations(horse);
-                else if (ModApi.IsNotATractor(horse) && horseSkinMap.ContainsKey(horse.Manners))
-                    creaturesToAdd.Add(horse, horseSkinMap[horse.Manners]);
-                else if (ModApi.IsNotATractor(horse))
+                    continue;
+                }
+                else if (!ModApi.IsNotATractor(horse))
+                    continue;
+
+                long longID = ModEntry.GetLongID(horse);
+                // Horse unregistered
+                if (longID == 0)
                     creaturesToAdd.Add(horse, 0);
+                // Horse registered in previous system
+                else if (horseSkinMap.ContainsKey(longID))
+                    creaturesToAdd.Add(horse, horseSkinMap[longID]);
                 // Reset any previous known ShortID
                 horse.Manners = 0;
             }
@@ -246,13 +259,16 @@ namespace AdoptSkin.Framework
             ModEntry.AnimalShortToLongIDs = new Dictionary<int, long>();
             foreach (FarmAnimal animal in ModApi.GetAnimals())
             {
-                if (animalSkinMap.ContainsKey(animal.myID.Value))
-                    Entry.AddCreature(animal, animalSkinMap[animal.myID.Value]);
+                long longID = ModEntry.GetLongID(animal);
+                // Animal registered in previous system
+                if (animalSkinMap.ContainsKey(longID))
+                    creaturesToAdd.Add(animal, animalSkinMap[longID]);
+                // Animal unregistered
                 else
-                    Entry.AddCreature(animal);
+                    creaturesToAdd.Add(animal, 0);
             }
 
-
+            // Add in all creatures from older systems
             foreach (KeyValuePair<Character, int> creatureInfo in creaturesToAdd)
                 Entry.AddCreature(creatureInfo.Key, creatureInfo.Value);
         }
