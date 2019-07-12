@@ -289,7 +289,7 @@ namespace AdoptSkin
                 return pet.Manners;
             else if (creature is Horse horse)
                 return horse.Manners;
-            else if (creature is FarmAnimal animal)
+            else if (creature is FarmAnimal animal && AnimalLongToShortIDs.ContainsKey(GetLongID(animal)))
                 return AnimalLongToShortIDs[GetLongID(animal)];
             return 0;
         }
