@@ -72,11 +72,7 @@ namespace AdoptSkin.Framework
 
             // Spread out pets from around water dish
             if (ModEntry.Config.DisperseCuddlePuddle)
-            {
-                if (IsWeatherBad())
-                    BadWeatherPetSpawn();
                 ModEntry.SHelper.Events.Player.Warped += this.SpreadPets;
-            }
         }
 
 
@@ -123,20 +119,26 @@ namespace AdoptSkin.Framework
         {
             List<Pet> pets = ModApi.GetPets().ToList();
 
-            // Ensure Stray isn't moved around by vanilla
-            ModEntry.Creator.MoveStrayToSpawn();
-
-            // No pets are on the farm
+            // No pets are in the game
             if (pets.Count == 0)
                 return;
 
+            // Only do teleport if the player is entering the Farm, FarmHouse, or Marnie's
+            if (!typeof(Farm).IsAssignableFrom(e.NewLocation.GetType()) &&
+                !typeof(FarmHouse).IsAssignableFrom(e.NewLocation.GetType()) &&
+                (Stray.Marnies != e.NewLocation))
+                return;
 
-            if ((e.NewLocation is Farm || e.NewLocation is FarmHouse) && (Game1.isRaining || Game1.isLightning || Game1.isSnowing))
+            // Ensure Stray isn't moved around by vanilla
+            ModEntry.Creator.MoveStrayToSpawn();
+
+
+            if (IsIndoorWeather())
             {
-                BadWeatherPetSpawn();
+                IndoorWeatherPetSpawn();
                 return;
             }
-            else if (e.NewLocation is Farm)
+            else
             {
                 // Find area to warp pets to
                 Farm farm = Game1.getFarm();
@@ -170,9 +172,9 @@ namespace AdoptSkin.Framework
                     return;
                 }
 
-                // Pet spread
+                // Spread pets
                 foreach (Pet pet in ModApi.GetPets())
-                    if (ModApi.IsInDatabase(pet))
+                    if (!ModApi.IsStray(pet))
                     {
                         Vector2 ranTile = warpableTiles[Randomizer.Next(0, warpableTiles.Count)];
                         Game1.warpCharacter(pet, farm, ranTile);
@@ -182,7 +184,7 @@ namespace AdoptSkin.Framework
 
 
         /// <summary>Spawns all owned pets into the FarmHouse</summary>
-        internal void BadWeatherPetSpawn()
+        internal void IndoorWeatherPetSpawn()
         {
             foreach (Pet pet in ModApi.GetPets())
                 if (!ModApi.IsStray(pet))
@@ -190,7 +192,7 @@ namespace AdoptSkin.Framework
         }
 
 
-        internal bool IsWeatherBad() { return (Game1.isRaining || Game1.isSnowing || Game1.isLightning); }
+        internal bool IsIndoorWeather() { return (Game1.isRaining || Game1.isSnowing || Game1.isLightning || Game1.isDarkOut()); }
 
 
         internal static bool IsTileAccessible(GameLocation map, Vector2 tile)
@@ -224,8 +226,9 @@ namespace AdoptSkin.Framework
             if (StrayInfo != null)
             {
                 // Check for mouse and controller versions of interaction
-                if ((e.Button.Equals(SButton.MouseRight) && IsOverPetOrHorse((int)e.Cursor.Tile.X, (int)e.Cursor.Tile.Y, StrayInfo.PetInstance) && StrayInfo.PetInstance.withinPlayerThreshold(3))   ||
+                if (((e.Button.Equals(SButton.MouseRight) && IsOverPetOrHorse((int)e.Cursor.Tile.X, (int)e.Cursor.Tile.Y, StrayInfo.PetInstance) && StrayInfo.PetInstance.withinPlayerThreshold(3))   ||
                     (e.Button.Equals(SButton.ControllerA) && StrayInfo.PetInstance.withinPlayerThreshold(1)))
+                    && Game1.player.currentLocation == Stray.Marnies)
                 {
                     Game1.activeClickableMenu = new ConfirmationDialog("This is one of the strays that Marnie has taken in. \n\n" +
                         $"The animal is wary, but curious. Will you adopt this {ModEntry.Sanitize(StrayInfo.PetInstance.GetType().Name)} for {AdoptPrice}G?", (who) =>
@@ -249,8 +252,9 @@ namespace AdoptSkin.Framework
             if (HorseInfo != null)
             {
                 // Check for mouse and controller versions of interaction
-                if ((e.Button.Equals(SButton.MouseRight) && IsOverPetOrHorse((int)e.Cursor.Tile.X, (int)e.Cursor.Tile.Y, HorseInfo.HorseInstance) && HorseInfo.HorseInstance.withinPlayerThreshold(3)) ||
+                if (((e.Button.Equals(SButton.MouseRight) && IsOverPetOrHorse((int)e.Cursor.Tile.X, (int)e.Cursor.Tile.Y, HorseInfo.HorseInstance) && HorseInfo.HorseInstance.withinPlayerThreshold(3)) ||
                     (e.Button.Equals(SButton.ControllerA) && HorseInfo.HorseInstance.withinPlayerThreshold(1)))
+                    && Game1.player.currentLocation == HorseInfo.Map)
                 {
                     Game1.activeClickableMenu = new ConfirmationDialog("This appears to be an escaped horse from a neighboring town. \n\nIt looks tired, but friendly. Will you adopt this horse?", (who) =>
                     {
