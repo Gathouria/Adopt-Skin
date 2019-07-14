@@ -31,7 +31,7 @@ What A&S lets you do:
 - To use the vanilla skin for an animal instead of a custom one, just remove any skins for that creature type from the `/skins` folder
 
 That's it! You're all set.
-(Customized options can be set in the `Config file`, as described below)
+(Customized options can be set in the `Config` file, as described below)
 
 
 # Sprite names:
