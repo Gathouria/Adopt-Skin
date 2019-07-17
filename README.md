@@ -98,6 +98,9 @@ If you know what you're doing (a.k.a I am not user support for BFAV, and am also
 **Can I turn off/change X feature?**
 > Check the `Config` file. There's a ton of things you can turn on and off or set to a different value. Explanations of the options in the `Config` are described below.
 
+**Can I change/rename/delete/add to folders inside of `/assets/skins`?**
+> Yep! Any subfolder of the `/skins` folder is purely serving as a visual means to organize! You can do whatever you like to them, and nest folders to your heart's content; A&S will grab any skin inside. Just make sure you're still naming everything the same- A&S doesn't care *what* folder you put them in.
+
 **Where's the `Config` file?**
 > The `Config` file will generate after you've run Stardew Valley at least once after installing A&S.
 
@@ -117,6 +120,9 @@ If you know what you're doing (a.k.a I am not user support for BFAV, and am also
 
 **Can I reskin the petbed at Marnie's?**
 > Sure can. Just make sure your image is named petbed.png and is the same size as the one in `AdoptSkin/assets`. Then just replace that image with yours!
+
+**The game crashes when I enter Marnie's**
+> If you removed `petbed.png`, this is the culprit. You can replace the image with something else, but it has to be there!
 
 **I don't see any stray pets at Marnie's!**
 > Strays only start appearing the day after you've received your first pet from Marnie in-game, and don't appear every day. The chance of them appearing can be altered in the `Config` file.
