@@ -24,7 +24,6 @@ namespace AdoptSkin
     // 
     // - Add support for custom animal types (Ento added an ExtraTypes to the Config, look there)
     // - Figure out pet spawn before moving maps (check to see if pet is already on map? Will this cause cuddle puddle?)
-    // - Android control compat
     // - Is there a keyboard interact button to do compat for?
     // - Baby stage pets and horses
 
@@ -423,7 +422,7 @@ namespace AdoptSkin
 
             // Teleport the first horse you find that the player actually owns
             foreach (Horse taxi in ModApi.GetHorses())
-                if (ModApi.IsInDatabase(taxi) && (id == 0 || id == GetLongID(taxi)))
+                if (!ModApi.IsWildHorse(taxi))
                 {
                     Game1.warpCharacter(taxi, Game1.player.currentLocation, Game1.player.getTileLocation());
                     return true;
@@ -450,7 +449,7 @@ namespace AdoptSkin
                 Vector2 stableWarp = new Vector2(stableX, stableY);
 
                 foreach (Horse horse in ModApi.GetHorses())
-                    if (ModApi.IsInDatabase(horse))
+                    if (!ModApi.IsWildHorse(horse))
                         Game1.warpCharacter(horse, "farm", stableWarp);
 
                 ModEntry.SMonitor.Log("All horses have been warped to the stable.", LogLevel.Alert);
@@ -480,7 +479,8 @@ namespace AdoptSkin
             AnimalListChangeCheck();
 
             // Display name tooltip if necessary
-            ToolTip.HoverCheck();
+            if (Config.PetAndHorseNameTags)
+                ToolTip.HoverCheck();
         }
 
 
@@ -605,7 +605,7 @@ namespace AdoptSkin
             if (!Context.IsPlayerFree)
                 return;
 
-            if (e.Button.ToString().ToLower() == Config.HorseWhistleKey.ToLower())
+            if (Config.HorseWhistleKey != null && e.Button.ToString().ToLower() == Config.HorseWhistleKey.ToLower())
             {
                 if (!CallHorse())
                 {
@@ -613,7 +613,7 @@ namespace AdoptSkin
                     Game1.chatBox.addInfoMessage("Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"");
                 }
             }
-            if (e.Button.ToString().ToLower() == Config.CorralKey.ToLower())
+            if (Config.CorralKey != null && e.Button.ToString().ToLower() == Config.CorralKey.ToLower())
             {
                 CorralHorses();
             }
