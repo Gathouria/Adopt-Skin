@@ -23,7 +23,6 @@ namespace AdoptSkin
     // ** The TODO List **
     // 
     // - Add support for custom animal types (Ento added an ExtraTypes to the Config, look there)
-    // - Figure out pet spawn before moving maps (check to see if pet is already on map? Will this cause cuddle puddle?)
     // - Is there a keyboard interact button to do compat for?
     // - Baby stage pets and horses
 
@@ -420,9 +419,18 @@ namespace AdoptSkin
                 return false;
             }
 
-            // Teleport the first horse you find that the player actually owns
-            foreach (Horse taxi in ModApi.GetHorses())
-                if (!ModApi.IsWildHorse(taxi))
+            // Teleport the horse with the given ID or the last horse ridden
+            List<Horse> taxis = ModApi.GetHorses().ToList();
+            taxis.Reverse();
+            foreach (Horse taxi in taxis)
+                if (ModApi.IsWildHorse(taxi))
+                    continue;
+                else if (id != 0 && GetShortID(taxi) == id)
+                {
+                    Game1.warpCharacter(taxi, Game1.player.currentLocation, Game1.player.getTileLocation());
+                    return true;
+                }
+                else if (id == 0)
                 {
                     Game1.warpCharacter(taxi, Game1.player.currentLocation, Game1.player.getTileLocation());
                     return true;
@@ -474,6 +482,10 @@ namespace AdoptSkin
         {
             // Check if a horse needs to be re-added to the map
             HorseDismountedCheck();
+            // OneTileHorse mounted check
+            if (Config.OneTileHorse)
+                foreach (Horse horse in BeingRidden)
+                    horse.squeezeForGate();
 
             // Make sure A&S database is up-to-date
             AnimalListChangeCheck();
@@ -489,11 +501,7 @@ namespace AdoptSkin
         {
             foreach (NPC npc in e.Removed)
                 if (npc is Horse horse && horse.rider != null && horse.Manners != 0)
-                {
                     BeingRidden.Add(horse);
-                    if (Config.OneTileHorse)
-                        horse.squeezeForGate();
-                }
         }
 
 
