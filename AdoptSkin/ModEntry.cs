@@ -67,6 +67,10 @@ namespace AdoptSkin
         internal static CreationHandler Creator;
         internal static SaveLoadHandler SaverLoader;
 
+        // Mod integration
+        internal static BFAV226Integrator BFAV226Worker;
+        internal static BFAV300Integrator BFAV300Worker;
+
         // Skin assets
         internal static Dictionary<string, Dictionary<int, AnimalSkin>> Assets = new Dictionary<string, Dictionary<int, AnimalSkin>>();
 
@@ -135,7 +139,7 @@ namespace AdoptSkin
             // DEBUG
             if (Config.DebuggingMode)
             {
-                helper.ConsoleCommands.Add("debug_asreset", "DEBUG: ** WARNING ** Resets all skins and creature IDs, but ensures that all creatures are properly in the Adopt & Skin system.", Commander.OnCommandReceived);
+                helper.ConsoleCommands.Add("debug_reset", "DEBUG: ** WARNING ** Resets all skins and creature IDs, but ensures that all creatures are properly in the Adopt & Skin system.", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_skinmaps", "DEBUG: Prints all info in current skin maps", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_idmaps", "DEBUG: Prints AnimalLongToShortIDs", Commander.OnCommandReceived);
                 helper.ConsoleCommands.Add("debug_pets", "DEBUG: Print the information for every Pet instance on the map", Commander.OnCommandReceived);
@@ -259,7 +263,7 @@ namespace AdoptSkin
                 return null;
             else if (!Assets[ModApi.GetInternalType(creature)].ContainsKey(skinID))
             {
-                ModEntry.SMonitor.Log($"{creature.Name}'s skin ID no longer exists in `/assets/skins`. Skin will be randomized.", LogLevel.Warn);
+                ModEntry.SMonitor.Log($"{creature.Name}'s skin ID no longer exists in `/assets/skins`. Skin will be randomized.", LogLevel.Alert);
                 skinID = RandomizeSkin(creature);
             }
 
@@ -418,7 +422,7 @@ namespace AdoptSkin
             // Make sure that the player is calling the horse while outside
             if (!Game1.player.currentLocation.IsOutdoors)
             {
-                ModEntry.SMonitor.Log("You cannot call for a horse while indoors.", LogLevel.Warn);
+                ModEntry.SMonitor.Log("You cannot call for a horse while indoors.", LogLevel.Alert);
                 Game1.chatBox.addInfoMessage("You hear your Grandfather's voice echo in your head.. \"Now is not the time to use that.\"");
                 return false;
             }
@@ -464,7 +468,7 @@ namespace AdoptSkin
                     if (!ModApi.IsWildHorse(horse))
                         Game1.warpCharacter(horse, "farm", stableWarp);
 
-                ModEntry.SMonitor.Log("All horses have been warped to the stable.", LogLevel.Info);
+                ModEntry.SMonitor.Log("All horses have been warped to the stable.", LogLevel.Alert);
                 return;
             }
 
@@ -621,7 +625,7 @@ namespace AdoptSkin
             {
                 if (!CallHorse())
                 {
-                    ModEntry.SMonitor.Log("You do not own any horse that you can call.", LogLevel.Warn);
+                    ModEntry.SMonitor.Log("You do not own any horse that you can call.", LogLevel.Alert);
                     Game1.chatBox.addInfoMessage("Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"");
                 }
             }
