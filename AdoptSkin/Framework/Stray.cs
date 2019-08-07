@@ -19,9 +19,6 @@ namespace AdoptSkin.Framework
         /// <summary>RNG for selecting randomized aspects</summary>
         private readonly Random Randomizer = new Random();
 
-        /// <summary>Structures constructors for pet types</summary>
-        internal static IDictionary<Type, Func<int, int, Pet>> PetConstructors = new Dictionary<Type, Func<int, int, Pet>>();
-
         /// <summary>The GameLocation for Marnie's house</summary>
         internal static readonly GameLocation Marnies = Game1.getLocationFromName("AnimalShop");
         /// <summary>Warp location for a potential pet at the beginning of the day</summary>
@@ -43,7 +40,7 @@ namespace AdoptSkin.Framework
             SkinID = ModEntry.GetRandomSkin(PetType);
 
             // Create Pet instance
-            PetInstance = PetConstructors[ModEntry.PetTypeMap[PetType]]((int)CreationLocation.X, (int)CreationLocation.Y);
+            PetInstance = (Pet)Activator.CreateInstance(ModEntry.PetTypeMap[PetType], (int)CreationLocation.X, (int)CreationLocation.Y);
             PetInstance.Manners = StrayID;
             PetInstance.Name = "Stray";
             PetInstance.displayName = "Stray";
