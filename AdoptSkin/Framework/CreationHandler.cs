@@ -28,7 +28,6 @@ namespace AdoptSkin.Framework
 
         /// <summary>Randomizer for logic within CreationHandler instances.</summary>
         private readonly Random Randomizer = new Random();
-        private readonly int PetWarpTileID = 1937;
 
         /// <summary>Reference to Adopt & Skin's ModEntry. Used to access creature information and print information to the monitor when necessary.</summary>
         internal ModEntry Earth;
@@ -249,15 +248,10 @@ namespace AdoptSkin.Framework
                                 cd.cancel();
 
                             if (Game1.player.Money >= AdoptPrice)
-                            {
-                                Game1.player.Money -= AdoptPrice;
                                 Game1.activeClickableMenu = new NamingMenu(PetNamer, $"What will you name it?");
-                            }
                             else
-                            {
                                 // Exit the naming menu
                                 Game1.drawObjectDialogue($"You don't have {AdoptPrice}G..");
-                            }
                         });
                 }
             }
@@ -335,6 +329,7 @@ namespace AdoptSkin.Framework
 
             // Exit the naming menu
             Game1.drawObjectDialogue($"{petName} was brought home.");
+            Game1.player.Money -= AdoptPrice;
         }
 
 

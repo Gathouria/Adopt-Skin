@@ -45,6 +45,7 @@ namespace AdoptSkin.Framework
             {
                 HandledPetTypes.Add(id);
                 ModEntry.PetTypeMap.Add(id, type);
+                Stray.PetConstructors.Add(type, (x, y) => new Cat(x, y));
             }
             else if (typeof(Horse).IsAssignableFrom(type))
             {
