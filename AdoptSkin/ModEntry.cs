@@ -676,6 +676,13 @@ namespace AdoptSkin
             Character creature = GetCreature(longID);
             if (creature != null && (creature is Pet || creature is Horse))
                 Game1.removeThisCharacterFromAllLocations(creature as NPC);
+            // Remove FarmAnimal-specific ID markers from lists
+            else if (AnimalLongToShortIDs.ContainsKey(longID))
+            {
+                int shortID = AnimalLongToShortIDs[longID];
+                AnimalLongToShortIDs.Remove(longID);
+                AnimalShortToLongIDs.Remove(shortID);
+            }
 
             // Scrub internal IDs and skin mapping from system
             IDToCategory.Remove(longID);
