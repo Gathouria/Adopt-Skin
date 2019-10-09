@@ -427,9 +427,7 @@ namespace AdoptSkin
             List<Horse> taxis = ModApi.GetHorses().ToList();
             taxis.Reverse();
             foreach (Horse taxi in taxis)
-                if (ModApi.IsWildHorse(taxi))
-                    continue;
-                else if (id != 0 && GetShortID(taxi) == id)
+                if (id != 0 && GetShortID(taxi) == id)
                 {
                     Game1.warpCharacter(taxi, Game1.player.currentLocation, Game1.player.getTileLocation());
                     return true;
@@ -447,30 +445,52 @@ namespace AdoptSkin
         /// <summary>Calls all horses owned by the player to return to the player's stable</summary>
         internal static void CorralHorses()
         {
-            // Find the farm's stable
-            Stable horsehut = null;
-            foreach (Building building in Game1.getFarm().buildings)
-                if (building is Stable)
-                    horsehut = building as Stable;
+            // Gather the taxis
+            List<Horse> horses = new List<Horse>();
+            foreach (Horse horse in ModApi.GetHorses())
+                horses.Add(horse);
 
-            if (horsehut != null)
+            // Ensure you own at least one taxi
+            if (horses.Count == 0)
             {
-                // WARP THEM. WARP THEM ALL.
-                int stableX = int.Parse(horsehut.tileX.ToString()) + 1;
-                int stableY = int.Parse(horsehut.tileY.ToString()) + 1;
-                Vector2 stableWarp = new Vector2(stableX, stableY);
-
-                foreach (Horse horse in ModApi.GetHorses())
-                    if (!ModApi.IsWildHorse(horse))
-                        Game1.warpCharacter(horse, "farm", stableWarp);
-
-                ModEntry.SMonitor.Log("All horses have been warped to the stable.", LogLevel.Info);
+                ModEntry.SMonitor.Log("NOTICE: You do not own any horses", LogLevel.Error);
+                Game1.chatBox.addInfoMessage("Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"");
                 return;
             }
 
+            // Find the farm's stable(s)
+            List<Stable> horsehuts = new List<Stable>();
+            foreach (Building building in Game1.getFarm().buildings)
+                if (building is Stable stable)
+                    foreach (Horse horse in horses)
+                        if (stable.HorseId == horse.HorseId)
+                        {
+                            horsehuts.Add(building as Stable);
+                            break;
+                        }
+                    
             // Player does not own a stable
-            ModEntry.SMonitor.Log("NOTICE: You don't have a stable to warp to!", LogLevel.Error);
-            Game1.chatBox.addInfoMessage("Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"");
+            if (horsehuts.Count == 0)
+            {
+                ModEntry.SMonitor.Log("NOTICE: You don't have a stable to warp to!", LogLevel.Error);
+                Game1.chatBox.addInfoMessage("Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"");
+                return;
+            }
+
+            // WARP THEM. WARP THEM ALL.
+            foreach (Horse horse in horses)
+                foreach (Stable stable in horsehuts)
+                    if (horse.HorseId == stable.HorseId)
+                    {
+                        int stableX = int.Parse(stable.tileX.ToString()) + 1;
+                        int stableY = int.Parse(stable.tileY.ToString()) + 1;
+                        Vector2 stableWarp = new Vector2(stableX, stableY);
+                        Game1.warpCharacter(horse, "farm", stableWarp);
+                        break;
+                    }
+
+
+            ModEntry.SMonitor.Log("All horses have been warped to the stable.", LogLevel.Info);
         }
 
 
@@ -618,13 +638,7 @@ namespace AdoptSkin
                 return;
 
             if (Config.HorseWhistleKey != null && e.Button.ToString().ToLower() == Config.HorseWhistleKey.ToLower())
-            {
-                if (!CallHorse())
-                {
-                    ModEntry.SMonitor.Log("You do not own any horse that you can call.", LogLevel.Warn);
-                    Game1.chatBox.addInfoMessage("Your Grandfather's voice echoes in your head.. \"You aren't yet ready for this gift.\"");
-                }
-            }
+                CallHorse();
             if (Config.CorralKey != null && e.Button.ToString().ToLower() == Config.CorralKey.ToLower())
             {
                 CorralHorses();

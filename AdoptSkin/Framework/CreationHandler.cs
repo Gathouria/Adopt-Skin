@@ -29,6 +29,9 @@ namespace AdoptSkin.Framework
         /// <summary>Randomizer for logic within CreationHandler instances.</summary>
         private readonly Random Randomizer = new Random();
 
+        /// <summary>The string representation of a Horse instance without an associated Stable building.
+        private static readonly Guid ZeroHorseID = new Guid("00000000-0000-0000-0000-000000000000");
+
         /// <summary>Reference to Adopt & Skin's ModEntry. Used to access creature information and print information to the monitor when necessary.</summary>
         internal ModEntry Earth;
 
@@ -174,11 +177,10 @@ namespace AdoptSkin.Framework
 
                 // Spread pets
                 foreach (Pet pet in ModApi.GetPets())
-                    if (!ModApi.IsStray(pet))
-                    {
-                        Vector2 ranTile = warpableTiles[Randomizer.Next(0, warpableTiles.Count)];
-                        Game1.warpCharacter(pet, farm, ranTile);
-                    }
+                {
+                    Vector2 ranTile = warpableTiles[Randomizer.Next(0, warpableTiles.Count)];
+                    Game1.warpCharacter(pet, farm, ranTile);
+                }
             }
         }
 
@@ -187,8 +189,7 @@ namespace AdoptSkin.Framework
         internal void IndoorWeatherPetSpawn()
         {
             foreach (Pet pet in ModApi.GetPets())
-                if (!ModApi.IsStray(pet))
-                    pet.warpToFarmHouse(Game1.player);
+                pet.warpToFarmHouse(Game1.player);
         }
 
 
@@ -226,6 +227,22 @@ namespace AdoptSkin.Framework
                         return true;
             }
             return false;
+        }
+
+
+        /// <summary>Returns the first Stable instance found on the farm.</summary>
+        internal static Guid GetStableID()
+        {
+            Guid stableID = ZeroHorseID;
+
+            foreach (Horse horse in ModApi.GetHorses())
+                if (horse.HorseId != ZeroHorseID)
+                {
+                    stableID = horse.HorseId;
+                    break;
+                }
+
+            return stableID;
         }
 
 
@@ -347,6 +364,7 @@ namespace AdoptSkin.Framework
             // Name Horse and add to Adopt & Skin database
             HorseInfo.HorseInstance.Name = horseName;
             HorseInfo.HorseInstance.displayName = horseName;
+            HorseInfo.HorseInstance.HorseId = GetStableID();
             Earth.AddCreature(HorseInfo.HorseInstance, HorseInfo.SkinID);
 
             // Horse is no longer a WildHorse to keep track of
