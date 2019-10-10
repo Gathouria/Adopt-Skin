@@ -8,6 +8,7 @@ using StardewModdingAPI;
 
 using StardewValley;
 using StardewValley.Characters;
+using StardewValley.Buildings;
 
 namespace AdoptSkin.Framework
 {
@@ -244,6 +245,37 @@ namespace AdoptSkin.Framework
                     Game1.removeThisCharacterFromAllLocations(pet);
             }
         }
+
+        /// <summary>Returns the first Stable instance found on the farm.</summary>
+        public static Guid GetRandomStableID()
+        {
+            Guid stableID = CreationHandler.ZeroHorseID;
+
+            foreach (Horse horse in ModApi.GetHorses())
+                if (horse.HorseId != CreationHandler.ZeroHorseID)
+                {
+                    stableID = horse.HorseId;
+                    break;
+                }
+
+            return stableID;
+        }
+
+        /// <summary>Returns the Stable instance with the given HorseID field.</summary>
+        public static Stable GetStable(Guid guid)
+        {
+            if (Game1.getFarm() == null)
+                return null;
+
+            foreach (Building building in Game1.getFarm().buildings)
+            {
+                if (building is Stable stable && stable.HorseId == guid)
+                    return stable;
+            }
+            return null;
+        } 
+
+
 
         public static ModEntry.CreatureCategory GetCreatureCategory(Character creature) { return GetCreatureCategory(GetInternalType(creature)); }
 

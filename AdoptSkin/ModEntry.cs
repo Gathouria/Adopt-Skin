@@ -130,6 +130,7 @@ namespace AdoptSkin
             helper.ConsoleCommands.Add("set_skin", "Sets the skin of the given creature to the given skin ID. Call `set_skin <skin ID> <creature ID>`. To find a creature's ID, call `list_creatures`.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("corral_horses", "Warp all horses to the farm's stable, giving you the honor of being a professional clown car chauffeur.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("horse_whistle", "Summons one of the player's horses to them. Can be called with a horse's ID to call a specific horse. To find a horse's ID, call `list_creatures horse`.", Commander.OnCommandReceived);
+            helper.ConsoleCommands.Add("rename", "Renames the pet or horse of the given ID to the given name. Call `rename <creature ID> \"new name\"`.", Commander.OnCommandReceived);
             helper.ConsoleCommands.Add("sell", "Used to give away one of your pets or horses. Call `sell <creature ID>`. To find a creature's ID, call `list_creatures`.", Commander.OnCommandReceived);
 
             // DEBUG

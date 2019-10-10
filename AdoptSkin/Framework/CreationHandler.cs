@@ -30,7 +30,7 @@ namespace AdoptSkin.Framework
         private readonly Random Randomizer = new Random();
 
         /// <summary>The string representation of a Horse instance without an associated Stable building.
-        private static readonly Guid ZeroHorseID = new Guid("00000000-0000-0000-0000-000000000000");
+        internal static readonly Guid ZeroHorseID = new Guid("00000000-0000-0000-0000-000000000000");
 
         /// <summary>Reference to Adopt & Skin's ModEntry. Used to access creature information and print information to the monitor when necessary.</summary>
         internal ModEntry Earth;
@@ -230,20 +230,7 @@ namespace AdoptSkin.Framework
         }
 
 
-        /// <summary>Returns the first Stable instance found on the farm.</summary>
-        internal static Guid GetStableID()
-        {
-            Guid stableID = ZeroHorseID;
-
-            foreach (Horse horse in ModApi.GetHorses())
-                if (horse.HorseId != ZeroHorseID)
-                {
-                    stableID = horse.HorseId;
-                    break;
-                }
-
-            return stableID;
-        }
+        
 
 
         /// <summary>Check to see if the player is attempting to interact with a Stray or WildHorse</summary>
@@ -364,7 +351,7 @@ namespace AdoptSkin.Framework
             // Name Horse and add to Adopt & Skin database
             HorseInfo.HorseInstance.Name = horseName;
             HorseInfo.HorseInstance.displayName = horseName;
-            HorseInfo.HorseInstance.HorseId = GetStableID();
+            HorseInfo.HorseInstance.HorseId = ModApi.GetRandomStableID();
             Earth.AddCreature(HorseInfo.HorseInstance, HorseInfo.SkinID);
 
             // Horse is no longer a WildHorse to keep track of
