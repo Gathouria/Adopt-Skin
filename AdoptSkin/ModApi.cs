@@ -10,7 +10,9 @@ using StardewValley;
 using StardewValley.Characters;
 using StardewValley.Buildings;
 
-namespace AdoptSkin.Framework
+using AdoptSkin.Framework;
+
+namespace AdoptSkin
 {
     public class ModApi
     {
@@ -46,10 +48,8 @@ namespace AdoptSkin.Framework
             {
                 HandledPetTypes.Add(id);
                 ModEntry.PetTypeMap.Add(id, type);
-                if (typeof(Dog).IsAssignableFrom(type))
-                    Stray.PetConstructors.Add(type, (x, y) => new Dog(x, y));
-                else
-                    Stray.PetConstructors.Add(type, (x, y) => new Cat(x, y));
+                if (!Stray.PetConstructors.ContainsKey(type))
+                    Stray.PetConstructors.Add(type, () => new Pet());
             }
             else if (typeof(Horse).IsAssignableFrom(type))
             {
@@ -74,31 +74,6 @@ namespace AdoptSkin.Framework
 
             // Create an entry for assets to be added in ModEntry
             ModEntry.Assets.Add(id, new Dictionary<int, AnimalSkin>());
-        }
-
-        /// <summary>Registers Stardew Valley's default animal and pet types for skin support.</summary>
-        public static void RegisterDefaultTypes()
-        {
-            // Register default supported animal types
-            RegisterType("Blue Chicken", typeof(FarmAnimal));
-            RegisterType("Brown Chicken", typeof(FarmAnimal));
-            RegisterType("Brown Cow", typeof(FarmAnimal));
-            RegisterType("Dinosaur", typeof(FarmAnimal), false, false);
-            RegisterType("Duck", typeof(FarmAnimal));
-            RegisterType("Goat", typeof(FarmAnimal));
-            RegisterType("Pig", typeof(FarmAnimal));
-            RegisterType("Rabbit", typeof(FarmAnimal));
-            RegisterType("Sheep", typeof(FarmAnimal), true, true);
-            RegisterType("Void Chicken", typeof(FarmAnimal));
-            RegisterType("White Chicken", typeof(FarmAnimal));
-            RegisterType("White Cow", typeof(FarmAnimal));
-
-            // Register default supported pet types
-            RegisterType("cat", typeof(Cat));
-            RegisterType("dog", typeof(Dog));
-
-            // Register horse type
-            RegisterType("horse", typeof(Horse));
         }
 
 
@@ -273,9 +248,22 @@ namespace AdoptSkin.Framework
                     return stable;
             }
             return null;
-        } 
+        }
 
+        public static Farmer IDtoFarmer(long id)
+        {
+            foreach (Farmer farmer in Game1.getAllFarmers())
+                if (farmer.UniqueMultiplayerID == id)
+                    return farmer;
 
+            ModEntry.SMonitor.Log($"Invalid farmer ID: {id}", LogLevel.Debug);
+            return null;
+        }
+
+        public static long FarmerToID(Farmer farmer)
+        {
+            return farmer.UniqueMultiplayerID;
+        }
 
         public static ModEntry.CreatureCategory GetCreatureCategory(Character creature) { return GetCreatureCategory(GetInternalType(creature)); }
 
