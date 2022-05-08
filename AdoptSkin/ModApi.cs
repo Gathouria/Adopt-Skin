@@ -109,7 +109,7 @@ namespace AdoptSkin
         public static IEnumerable<Horse> GetHorses()
         {
             foreach (NPC npc in Utility.getAllCharacters())
-                if (npc is Horse horse && !ModApi.IsWildHorse(horse) && ModApi.IsNotATractor(horse))
+                if (npc is Horse horse && !ModApi.IsWildHorse(horse) && ModApi.IsNotATractorOrCart(horse))
                     yield return horse;
             // Horses being ridden don't technically exist, and must be added separately
             foreach (Horse horse in ModEntry.BeingRidden)
@@ -120,7 +120,7 @@ namespace AdoptSkin
         public static IEnumerable<Horse> GetAllHorses()
         {
             foreach (NPC npc in Utility.getAllCharacters())
-                if (npc is Horse horse && ModApi.IsNotATractor(horse))
+                if (npc is Horse horse && ModApi.IsNotATractorOrCart(horse))
                     yield return horse;
             // Horses being ridden don't technically exist, and must be added separately
             foreach (Horse horse in ModEntry.BeingRidden)
@@ -200,7 +200,7 @@ namespace AdoptSkin
 
         public static bool HasShearedSprite(string type) { return ModEntry.Assets.ContainsKey("sheared" + ModEntry.Sanitize(type)); }
 
-        public static bool IsNotATractor(Horse horse) { return !horse.Name.StartsWith("tractor/"); }
+        public static bool IsNotATractorOrCart(Horse horse) { return !horse.Name.StartsWith("tractor/") && !horse.Name.StartsWith("Mods/TrainTracks/"); }
 
         public static bool IsWildHorse(Character creature) { return (creature is Horse horse && IsWildHorse(horse.Manners)); }
 
