@@ -380,9 +380,9 @@ namespace AdoptSkin.Framework
 
             // Add custom sprites
             foreach (string path in Directory.EnumerateFiles(Path.Combine(SHelper.DirectoryPath, "assets", "skins"), "*", SearchOption.AllDirectories))
-                PullSprite(path);
+                PullSprite(path.Replace(SHelper.DirectoryPath, "")); // Fix an absolute path error
             // Grab the directory for the /Mods folder from the /Mods/AdoptSkin
-            
+
             //string modFolderPath = SHelper.DirectoryPath
             foreach (string path in Directory.EnumerateFiles(Path.Combine(SHelper.DirectoryPath)))
 
